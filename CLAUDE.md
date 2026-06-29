@@ -10,7 +10,7 @@ diagnostic IDs). Read [README.md](README.md) for the product vision.
 
 - **Paste-safe diagnostics, not a PII platform.** That framing is the whole
   design — small, fast, structural-only. Everything detected is structural
-  (patterns, checksums, entropy, system lookup). No ML, no NER, no person-name
+  (patterns, structural validation, entropy, system lookup). No ML, no NER, no person-name
   or street-address detection. Free-text detection is a later, pluggable hook,
   never core.
 - **No persistence. No mapping file on disk, ever.** Consistency is per-run

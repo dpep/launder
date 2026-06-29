@@ -74,7 +74,7 @@ A short streaming pipeline, one line in flight:
 
 **read line → detect spans → resolve overlaps → assign placeholders → emit.**
 
-1. **Detect** runs structural matchers only — known prefixes, checksums, entropy under a key, and (with `--system`) a local identity lookup. No ML, no NER, no network.
+1. **Detect** runs structural matchers only — known prefixes, structural validation (IP octet ranges, JWT segment shape, UUID/SHA recognition), entropy under a key, and (with `--system`) a local identity lookup. No ML, no NER, no network.
 2. **Resolve** reduces overlapping matches to a non-overlapping set by precedence (a credentialed URL is caught as one credential, not split into host + path).
 3. **Assign** maps each distinct value to a stable placeholder for the life of the run.
 4. **Emit** substitutes spans, honoring the secret rule.
