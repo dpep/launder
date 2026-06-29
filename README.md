@@ -1,7 +1,7 @@
 launder — share logs safely
 ===========================
 
-**Paste-safe diagnostics, not a PII platform.** Pipe in a stack trace or log spew and `launder` hands back the same text with identifying paths, usernames, secrets, and contacts swapped for readable placeholders — while keeping everything a reader needs to actually help you: relative paths, file extensions, line numbers, system paths, and diagnostic IDs.
+Pipe in a stack trace or log spew and `launder` hands back the same text with identifying paths, usernames, secrets, and contacts swapped for readable placeholders — while keeping everything a reader needs to actually help you: relative paths, file extensions, line numbers, system paths, and diagnostic IDs.
 
 ```sh
 $ myapp 2>&1 | launder | pbcopy        # clean trace on the clipboard
@@ -74,7 +74,3 @@ A short streaming pipeline, one line in flight:
 4. **Emit** substitutes spans, honoring the secret rule.
 
 See [CLAUDE.md](CLAUDE.md) for development conventions.
-
-## License
-
-MIT © Daniel Pepper

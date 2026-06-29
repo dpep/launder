@@ -15,8 +15,8 @@ use crate::input::LineReader;
 use crate::report::Report;
 use crate::system;
 
-/// Make logs pastesafe — scrub identifying paths, secrets, and contacts from
-/// diagnostic output while keeping everything a reader needs to help.
+/// Scrub identifying paths, secrets, and contacts from logs and stack traces,
+/// keeping everything a reader needs to help.
 #[derive(Debug, Parser)]
 #[command(name = "launder", version, about)]
 struct Cli {
@@ -27,19 +27,19 @@ struct Cli {
     #[arg(short = 'o', long = "output", value_name = "FILE")]
     output: Option<String>,
 
-    /// Keep OS paths (/usr, /bin, /etc, …). Default: on.
-    #[arg(long = "keep-system", overrides_with = "no_keep_system")]
+    /// Keep OS paths (/usr, /bin, /etc, …) — the default; hidden no-op override.
+    #[arg(long = "keep-system", overrides_with = "no_keep_system", hide = true)]
     keep_system: bool,
 
-    /// Scrub system paths too.
+    /// Scrub OS paths too (kept by default).
     #[arg(long = "no-keep-system", overrides_with = "keep_system")]
     no_keep_system: bool,
 
-    /// Keep loopback + RFC1918 IPs. Default: on.
-    #[arg(long = "keep-private-ips", overrides_with = "all_ips")]
+    /// Keep loopback + RFC1918 IPs — the default; hidden no-op override.
+    #[arg(long = "keep-private-ips", overrides_with = "all_ips", hide = true)]
     keep_private_ips: bool,
 
-    /// Scrub private / loopback IPs as well.
+    /// Scrub private / loopback IPs too (kept by default).
     #[arg(long = "all-ips", overrides_with = "keep_private_ips")]
     all_ips: bool,
 

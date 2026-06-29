@@ -1,8 +1,8 @@
 [package]
 name = "launder"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
-description = "Make logs pastesafe: scrub identifying paths, secrets, and contacts from diagnostic output, keeping everything a reader needs."
+description = "Scrub identifying paths, secrets, and contacts from logs and stack traces, keeping everything a reader needs to help."
 license = "MIT"
 repository = "https://github.com/dpep/launder"
 keywords = ["redact", "secrets", "logs", "privacy", "cli"]
