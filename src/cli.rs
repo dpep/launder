@@ -27,11 +27,6 @@ struct Cli {
     #[arg(short = 'o', long = "output", value_name = "FILE")]
     output: Option<String>,
 
-    /// Use local identity sources ($HOME/$USER, /etc/passwd, hostname) for exact
-    /// detection. Still fully offline.
-    #[arg(long = "system")]
-    system: bool,
-
     /// Keep OS paths (/usr, /bin, /etc, …). Default: on.
     #[arg(long = "keep-system", overrides_with = "no_keep_system")]
     keep_system: bool,
@@ -101,11 +96,9 @@ fn execute(cli: &Cli) -> Result<()> {
         keep_system: !cli.no_keep_system,
         keep_private_ips: !cli.all_ips,
         with_originals: cli.with_originals,
-        system: if cli.system {
-            Some(system::detect())
-        } else {
-            None
-        },
+        // Local identity ($USER / $HOME / hostname) is always used as signal —
+        // a watchlist of known-identifying tokens, never pinned. Offline.
+        system: Some(system::detect()),
     };
     let mode = if cli.json {
         Mode::Json

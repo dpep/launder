@@ -22,8 +22,10 @@ diagnostic IDs). Read [README.md](README.md) for the product vision.
 - **Zero-config does the right thing.** Bare `… | launder` must produce clean,
   pasteable output with no flags. Flags are for precision, never for value.
 - **Deterministic within a run.** First-seen order drives numbering; same input
-  → same output. Stable ordering everywhere — no HashMap iteration leaking into
-  output.
+  → same output on a given machine. Stable ordering everywhere — no HashMap
+  iteration leaking into output. (The local-identity watchlist means output can
+  differ across machines — that's intended; shareability, not portability, is
+  the goal.)
 - **Asymmetric bias by type.** Paths/IPs bias toward *under*-scrubbing (keep
   system paths, extensions, private IPs, diagnostic IDs). Secrets bias toward
   *over*-detection (a missed credential is the worst outcome).
@@ -34,7 +36,7 @@ diagnostic IDs). Read [README.md](README.md) for the product vision.
 
 Rust, single statically-linkable binary, no runtime deps. `regex` for matching,
 `serde`/`serde_json` for structured output, `clap` for the CLI, `anyhow` for
-errors. Compile regex sets once via `std::sync::LazyLock`. `/etc/passwd` and
+errors. Compile regex sets once via `std::sync::LazyLock`. The environment and
 hostname are read directly — no crate.
 
 This machine's Rust came via Homebrew's keg-only `rustup`, so `cargo` may not be
@@ -67,7 +69,7 @@ launder/
       secrets.rs   ← pillar 2: prefixes, jwt, keys, url-creds, keyed entropy
       net.rs       ← email, ip (private-keep), host, mac
       ids.rs       ← UUID/SHA recognizers used to PRESERVE diagnostic IDs
-    system.rs      ← --system: $HOME/$USER, /etc/passwd, hostname (offline)
+    system.rs      ← local-identity signal: $USER/$HOME/hostname watchlist
     emit.rs        ← structured-output writers + the secret rule
     report.rs      ← --report summary
   tests/

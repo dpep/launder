@@ -7,6 +7,7 @@
 
 use launder::config::Config;
 use launder::engine::{Engine, Finding};
+use launder::system::SystemInfo;
 
 /// Launder a whole multi-line input with the given config; return the joined
 /// laundered text (suppressed lines dropped) and all findings.
@@ -176,6 +177,36 @@ fn only_filter_limits_types() {
         launder(cfg, "/Users/dpep/x ops@dpep.io").0,
         "/Users/dpep/x <EMAIL_1>"
     );
+}
+
+/// Config with a local-identity watchlist (what the CLI builds by default).
+fn with_system(usernames: &[&str], home: Option<&str>, hostnames: &[&str]) -> Config {
+    Config {
+        system: Some(SystemInfo {
+            usernames: usernames.iter().map(|s| s.to_string()).collect(),
+            home: home.map(|s| s.to_string()),
+            hostnames: hostnames.iter().map(|s| s.to_string()).collect(),
+        }),
+        ..Config::default()
+    }
+}
+
+#[test]
+fn system_signal_catches_bare_username_and_hostname() {
+    // The username appears with no home path to reveal it, and the hostname is
+    // only known from the local environment.
+    let cfg = with_system(&["dpep"], Some("/Users/dpep"), &["my-host"]);
+    let out = launder(cfg, "job by dpep on my-host\n/Users/dpep/x").0;
+    assert_eq!(out, "job by <USER_1> on <HOST_1>\n~/x");
+}
+
+#[test]
+fn system_signal_does_not_pin_local_identity() {
+    // Local $USER is dpep, but the trace is from a remote machine about alice.
+    // alice must still be the primary `~` — the watchlist imposes no ordering.
+    let cfg = with_system(&["dpep"], Some("/Users/dpep"), &["my-host"]);
+    let out = launder(cfg, "/Users/alice/a.rs\nuser=alice").0;
+    assert_eq!(out, "~/a.rs\nuser=<USER_1>");
 }
 
 #[test]

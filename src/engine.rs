@@ -39,23 +39,28 @@ pub struct Engine {
     line_no: usize,
     in_private_key: bool,
     extra_hosts: Vec<String>,
+    /// Literal `$HOME` prefix and its owner, for collapsing non-standard homes.
+    home: Option<(String, String)>,
 }
 
 impl Engine {
     pub fn new(cfg: Config) -> Self {
         let mut reg = Registry::new();
         let mut extra_hosts = Vec::new();
+        let mut home = None;
         if let Some(sys) = &cfg.system {
-            // Pin the primary identity to index 1 (`~` / <USER_1>).
-            if let Some(user) = &sys.primary_user {
-                reg.identity_index(user);
-                reg.enroll_bare(user);
-            }
-            for user in &sys.users {
-                reg.identity_index(user);
+            // Signal, not pinning: enroll the tokens to watch for, but assign no
+            // identity index up front — numbering follows first-seen order from
+            // the log, so a remote machine's trace is unaffected by local names.
+            for user in &sys.usernames {
                 reg.enroll_bare(user);
             }
             extra_hosts = sys.hostnames.clone();
+            if let Some(h) = &sys.home
+                && let Some(owner) = h.rsplit(['/', '\\']).next().filter(|s| !s.is_empty())
+            {
+                home = Some((h.clone(), owner.to_string()));
+            }
         }
         Engine {
             reg,
@@ -63,6 +68,7 @@ impl Engine {
             line_no: 0,
             in_private_key: false,
             extra_hosts,
+            home,
         }
     }
 
@@ -85,6 +91,9 @@ impl Engine {
         let mut candidates = Vec::new();
         if self.cfg.enabled(TypeGroup::Path) {
             detect::paths::detect(line, &mut candidates);
+            if let Some((prefix, owner)) = &self.home {
+                detect::paths::detect_home_dir(line, prefix, owner, &mut candidates);
+            }
         }
         if secrets_on {
             detect::secrets::detect(line, &mut candidates);

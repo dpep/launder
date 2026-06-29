@@ -31,6 +31,10 @@ The bias is asymmetric, on purpose:
 
 Replaced with readable, numbered placeholders — `<EMAIL_1>`, `<TOKEN_2>`, `<USER_1>`, … — numbered from 1 per type in first-seen order, so a repeated value reuses its placeholder and "user X did A then B" stays linkable. Kept untouched: system paths, extensions, line numbers, UUIDs, git SHAs, request IDs, and private IPs.
 
+## Knows your machine, doesn't assume it's yours
+
+launder reads your `$USER`, `$HOME`, and hostname (offline) and uses them as a **watchlist** — extra known-identifying tokens to scrub on sight, so your username gets caught even where no home path reveals it, and your machine name gets redacted. It's pure signal: it never *pins* your identity or imposes ordering. So a trace generated on your laptop and one you pulled from a remote box both launder cleanly — on a remote log the subject is whoever appears (they become `~`), and your local names simply stay inert because they don't show up. No flag, no config.
+
 ## No persistence, ever
 
 Consistency is per-run only. The mapping from value to placeholder lives in memory and is discarded at exit — **no file is written, ever.** A persisted map would be a re-identification key, and that's the one thing a tool like this must never leave behind. Two separate runs need not agree on numbering; that's intended. No network, no telemetry, no config file.
@@ -52,8 +56,6 @@ cargo install --path .             # or: make install
 ```sh
 launder [FILE...]            # files, or stdin if none
 launder -o/--output FILE     # write laundered text to FILE (default: stdout)
-launder --system             # exact identity detection from $HOME/$USER, /etc/passwd,
-                             #   hostname (opt-in precision, still fully offline)
 launder --no-keep-system     # scrub OS paths too (kept by default)
 launder --all-ips            # scrub private/loopback IPs too (kept by default)
 launder --only TYPES         # comma list: path,secret,email,ip,host,mac,user
@@ -74,7 +76,7 @@ A short streaming pipeline, one line in flight:
 
 **read line → detect spans → resolve overlaps → assign placeholders → emit.**
 
-1. **Detect** runs structural matchers only — known prefixes, structural validation (IP octet ranges, JWT segment shape, UUID/SHA recognition), entropy under a key, and (with `--system`) a local identity lookup. No ML, no NER, no network.
+1. **Detect** runs structural matchers only — known prefixes, structural validation (IP octet ranges, JWT segment shape, UUID/SHA recognition), entropy under a key, and a local-identity signal ($USER / $HOME / hostname, used as a watchlist). No ML, no NER, no network.
 2. **Resolve** reduces overlapping matches to a non-overlapping set by precedence (a credentialed URL is caught as one credential, not split into host + path).
 3. **Assign** maps each distinct value to a stable placeholder for the life of the run.
 4. **Emit** substitutes spans, honoring the secret rule.

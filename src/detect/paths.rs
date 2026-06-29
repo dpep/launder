@@ -112,10 +112,59 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
     }
 }
 
+/// Collapse a literal `$HOME` prefix (from the local-identity signal) to `~`,
+/// registering its owner. Catches non-standard homes the structural matchers
+/// miss; for a standard `/Users/<u>` home it just overlaps the structural match
+/// and the resolver dedups.
+pub fn detect_home_dir(line: &str, home: &str, owner: &str, out: &mut Vec<Candidate>) {
+    if home.is_empty() {
+        return;
+    }
+    let mut from = 0;
+    while let Some(rel) = line[from..].find(home) {
+        let start = from + rel;
+        let end_home = start + home.len();
+        // The prefix must end at a name boundary, so $HOME=/Users/dp doesn't
+        // swallow /Users/dpepper.
+        if !home_boundary(line, end_home) {
+            from = end_home;
+            continue;
+        }
+        let tail: String = line[end_home..]
+            .chars()
+            .take_while(|c| !c.is_whitespace() && *c != '\'' && *c != '"')
+            .collect();
+        let end = end_home + tail.len();
+        out.push(Candidate {
+            start,
+            end,
+            kind: Kind::Home,
+            subtype: Some("home_env"),
+            action: Action::Home {
+                user: owner.to_string(),
+                bare_eligible: true,
+                tail,
+            },
+            rank: 0,
+        });
+        from = end.max(start + 1);
+    }
+}
+
 /// True if the byte at `pos` ends the path: end-of-line or a non-path char.
 fn boundary_after(line: &str, pos: usize) -> bool {
     match line[pos..].chars().next() {
         None => true,
         Some(c) => !(c.is_alphanumeric() || c == '_' || c == '/'),
+    }
+}
+
+/// True if the char at `pos` ends a directory name (so a `$HOME` prefix match is
+/// a whole segment, not a prefix of a longer name). A path separator is fine; an
+/// alphanumeric / `_` / `-` / `.` means we're mid-name.
+fn home_boundary(line: &str, pos: usize) -> bool {
+    match line[pos..].chars().next() {
+        None => true,
+        Some(c) => !(c.is_alphanumeric() || c == '_' || c == '-' || c == '.'),
     }
 }
