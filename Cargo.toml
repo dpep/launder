@@ -1,0 +1,16 @@
+[package]
+name = "launder"
+version = "0.1.0"
+edition = "2024"
+description = "Make logs pastesafe: scrub identifying paths, secrets, and contacts from diagnostic output, keeping everything a reader needs."
+license = "MIT"
+repository = "https://github.com/dpep/launder"
+keywords = ["redact", "secrets", "logs", "privacy", "cli"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+regex = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
