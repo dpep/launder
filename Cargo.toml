@@ -1,6 +1,6 @@
 [package]
 name = "launder"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Make logs pastesafe: scrub identifying paths, secrets, and contacts from diagnostic output, keeping everything a reader needs."
 license = "MIT"
