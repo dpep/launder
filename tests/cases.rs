@@ -237,6 +237,43 @@ fn stripe_test_and_restricted_keys_are_redacted() {
 }
 
 #[test]
+fn json_escaped_keys_are_redacted() {
+    check(&[
+        (
+            r#"  Parameters: {\"password\"=>\"Zq8vN2kLp4Rx\"}"#,
+            r#"  Parameters: {\"password\"=>\"<SECRET_1>\"}"#,
+        ),
+        (
+            r#"{"body":"{\"api_key\":\"Qm7Tz9Lw2Xc4Vb6N\"}"}"#,
+            r#"{"body":"{\"api_key\":\"<SECRET_1>\"}"}"#,
+        ),
+        (
+            r#"got "{\\\"token\\\":\\\"Hk3Jd8Ws1Qz5Pm7R\\\"}""#,
+            r#"got "{\\\"token\\\":\\\"<SECRET_1>\\\"}""#,
+        ),
+    ]);
+}
+
+#[test]
+fn rails_sql_bind_values_are_redacted() {
+    check(&[
+        (
+            r#"  User Load (0.4ms)  SELECT "users".* FROM "users" WHERE "users"."token" = $1 LIMIT $2  [["token", "Hk3Jd8Ws1Qz5Pm7R"], ["LIMIT", 1]]"#,
+            r#"  User Load (0.4ms)  SELECT "users".* FROM "users" WHERE "users"."token" = $1 LIMIT $2  [["token", "<SECRET_1>"], ["LIMIT", 1]]"#,
+        ),
+        (
+            r#"  Account Update (0.2ms)  UPDATE "accounts" SET "api_key" = $1 WHERE "accounts"."id" = $2  [["api_key", "Qm7Tz9Lw2Xc4Vb6N"], ["id", 7]]"#,
+            r#"  Account Update (0.2ms)  UPDATE "accounts" SET "api_key" = $1 WHERE "accounts"."id" = $2  [["api_key", "<SECRET_1>"], ["id", 7]]"#,
+        ),
+        // A credential word in prose followed by a comma is not a bind.
+        (
+            "invalid token, Christopher retried",
+            "invalid token, Christopher retried",
+        ),
+    ]);
+}
+
+#[test]
 fn macos_home_collapses_keeping_tail_and_line_number() {
     assert_eq!(
         clean("/Users/dpep/code/proj/src/db.rs:42"),
