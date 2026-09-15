@@ -69,6 +69,12 @@ static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
+/// Every `KEYED_VALUE` key contains one of these. The leading class in that
+/// pattern defeats the regex crate's literal prefilter, so check these first.
+/// A regex, not an ASCII scan, so case folding matches `KEYED_VALUE` exactly.
+static KEYED_HINT: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)pass|pwd|secret|token|key|auth").unwrap());
+
 /// `Cookie:` / `Set-Cookie:` header; its `name=value` pairs are split below.
 static COOKIE_HEADER: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)\b(?:set-)?cookie\s*:(.*)").unwrap());
@@ -172,6 +178,9 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         });
     }
 
+    if !KEYED_HINT.is_match(line) {
+        return;
+    }
     for caps in KEYED_VALUE.captures_iter(line) {
         let val = caps.get(1).unwrap();
         let text = trim_unbalanced_closers(val.as_str());
