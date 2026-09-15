@@ -78,13 +78,8 @@ impl Engine {
 
         // PEM private-key blocks span lines; collapse the whole block to one
         // <PRIVATE_KEY> placeholder.
-        if secrets_on {
-            if self.in_private_key {
-                return self.continue_private_key(line);
-            }
-            if detect::secrets::is_private_key_begin(line) {
-                return self.begin_private_key(line);
-            }
+        if secrets_on && self.in_private_key {
+            return self.continue_private_key(line);
         }
 
         // Phase A: every enabled detector except bare-username.
@@ -92,6 +87,17 @@ impl Engine {
         let view = detect::detection_view(line);
         let text = view.as_ref();
         let mut candidates = Vec::new();
+        if secrets_on && let Some((start, end, continues)) = detect::secrets::private_key(text) {
+            self.in_private_key = continues;
+            candidates.push(Candidate {
+                start,
+                end,
+                kind: Kind::Secret,
+                subtype: Some("private_key"),
+                action: Action::Fixed("<PRIVATE_KEY>"),
+                rank: u8::MAX,
+            });
+        }
         if self.cfg.enabled(TypeGroup::Path) {
             detect::paths::detect(text, &mut candidates);
             if let Some((prefix, owner)) = &self.home {
@@ -193,33 +199,6 @@ impl Engine {
         out
     }
 
-    fn begin_private_key(&mut self, line: &str) -> LineResult {
-        let begin = line.find("-----BEGIN").unwrap();
-        let prefix = &line[..begin];
-        // A single-line key carries its own END marker after the BEGIN header.
-        let after_begin = begin + "-----BEGIN".len();
-        if let Some(end_rel) = line[after_begin..].find("-----END") {
-            let end_marker = "PRIVATE KEY-----";
-            let end_at = after_begin + end_rel;
-            let after = line[end_at..]
-                .find(end_marker)
-                .map(|i| &line[end_at + i + end_marker.len()..])
-                .unwrap_or("");
-            let output = format!("{prefix}<PRIVATE_KEY>{after}");
-            let finding = self.private_key_finding(begin, line);
-            return LineResult {
-                output: Some(output),
-                findings: vec![finding],
-            };
-        }
-        self.in_private_key = true;
-        let finding = self.private_key_finding(begin, line);
-        LineResult {
-            output: Some(format!("{prefix}<PRIVATE_KEY>")),
-            findings: vec![finding],
-        }
-    }
-
     fn continue_private_key(&mut self, line: &str) -> LineResult {
         if detect::secrets::is_private_key_end(line) {
             self.in_private_key = false;
@@ -241,20 +220,6 @@ impl Engine {
         LineResult {
             output: None,
             findings: vec![],
-        }
-    }
-
-    fn private_key_finding(&self, col_byte: usize, line: &str) -> Finding {
-        Finding {
-            kind: Kind::Secret,
-            subtype: Some("private_key"),
-            line: self.line_no,
-            col: line[..col_byte].chars().count() + 1,
-            len: line[col_byte..].chars().count(),
-            replacement: "<PRIVATE_KEY>".to_string(),
-            original: String::new(),
-            byte_start: col_byte,
-            byte_end: line.len(),
         }
     }
 }

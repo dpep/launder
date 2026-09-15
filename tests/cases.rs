@@ -279,6 +279,55 @@ fn rails_sql_bind_values_are_redacted() {
 }
 
 #[test]
+fn private_key_in_escaped_json_string_is_redacted() {
+    check(&[
+        (
+            concat!(
+                r#"{"private_key":"-----BEGIN "#,
+                "PRIVATE KEY",
+                r#"-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END "#,
+                "PRIVATE KEY",
+                r#"-----\n","api_key":"Qm7Tz9Lw2Xc4Vb6N"}"#
+            ),
+            r#"{"private_key":"<PRIVATE_KEY>\n","api_key":"<SECRET_1>"}"#,
+        ),
+        (
+            concat!(
+                r#"{"api_key":"Qm7Tz9Lw2Xc4Vb6N","private_key":"-----BEGIN "#,
+                "PRIVATE KEY",
+                r#"-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END "#,
+                "PRIVATE KEY",
+                r#"-----\n"}"#
+            ),
+            r#"{"api_key":"<SECRET_1>","private_key":"<PRIVATE_KEY>\n"}"#,
+        ),
+        // Truncated: no END marker, but the escapes show the key is inline, so
+        // the following lines must survive.
+        (
+            concat!(
+                r#"{"private_key":"-----BEGIN "#,
+                "PRIVATE KEY",
+                r#"-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC"}"#,
+                "\nCompleted 200 OK in 5ms"
+            ),
+            "{\"private_key\":\"<PRIVATE_KEY>\"}\nCompleted 200 OK in 5ms",
+        ),
+        // String concatenation: the key body is on the next lines, so the block
+        // stays open until END.
+        (
+            concat!(
+                r#"KEY = "-----BEGIN "#,
+                "PRIVATE KEY",
+                "-----\\n\" \\\n  \"MIIEvQIBADANBgkqhkiG9w0BAQEFAASC\\n\" \\\n  \"-----END ",
+                "PRIVATE KEY",
+                "-----\\n\"\nok"
+            ),
+            "KEY = \"<PRIVATE_KEY>\n\\n\"\nok",
+        ),
+    ]);
+}
+
+#[test]
 fn author_is_not_an_auth_key() {
     check(&[
         ("author: Christopher Nolan", "author: Christopher Nolan"),

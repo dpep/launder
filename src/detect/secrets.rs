@@ -259,9 +259,32 @@ fn is_redaction_marker(s: &str) -> bool {
     })
 }
 
-/// True if `line` begins (or continues) a PEM private-key block.
-pub fn is_private_key_begin(line: &str) -> bool {
-    line.contains("-----BEGIN") && line.contains("PRIVATE KEY-----")
+/// A PEM private key that starts on `line`: the byte span to redact, and
+/// whether the block continues onto the following lines.
+///
+/// A key inlined in a string (`"-----BEGIN …-----\nMIIE…"`) ends at its END
+/// marker, or at the closing quote when truncated; everything around it is
+/// still scanned. `"-----BEGIN …-----\n" \` carries no key material after the
+/// escape, so it is a multi-line block like a bare header.
+pub fn private_key(line: &str) -> Option<(usize, usize, bool)> {
+    const MARKER: &str = "PRIVATE KEY-----";
+    let start = line.find("-----BEGIN")?;
+    let header_end = start + line[start..].find(MARKER)? + MARKER.len();
+    let rest = &line[header_end..];
+    if let Some(end) = rest.find("-----END")
+        && let Some(m) = rest[end..].find(MARKER)
+    {
+        return Some((start, header_end + end + m + MARKER.len(), false));
+    }
+    let body = rest.trim_start_matches(['\\', 'r', 'n']);
+    let escaped = rest.starts_with('\\') && body.len() < rest.len();
+    if !escaped || !body.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '+' || c == '/') {
+        return Some((start, line.len(), true));
+    }
+    let end = rest.find(['"', '\'']).map_or(line.len(), |q| {
+        header_end + rest[..q].trim_end_matches('\\').len()
+    });
+    Some((start, end, false))
 }
 
 /// True if `line` ends a PEM private-key block.
