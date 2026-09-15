@@ -52,9 +52,10 @@ static AUTH_HEADER: LazyLock<Regex> = LazyLock::new(|| {
         .unwrap()
 });
 
-/// Credentials in a URL / connection string: redact only the password.
+/// Credentials in a URL / connection string: redact only the password. The
+/// user may be empty, as in `redis://:pass@host`.
 static URL_CREDENTIAL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"[a-zA-Z][a-zA-Z0-9+.\-]*://[^:/@\s'"]+:([^@/\s'"]+)@"#).unwrap()
+    Regex::new(r#"[a-zA-Z][a-zA-Z0-9+.\-]*://[^:/@\s'"]*:([^@/\s'"]+)@"#).unwrap()
 });
 
 /// A suspicious key whose value should be entropy-checked (contextual scan).

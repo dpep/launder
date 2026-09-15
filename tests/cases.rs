@@ -154,6 +154,14 @@ fn ruby_constants_are_not_ipv6() {
 }
 
 #[test]
+fn url_credential_with_empty_user_redacts_password_only() {
+    check(&[(
+        "redis://:Zq8vN2kLp4Rx@cache.example.com:6379/0",
+        "redis://:<PASSWORD>@cache.example.com:6379/0",
+    )]);
+}
+
+#[test]
 fn macos_home_collapses_keeping_tail_and_line_number() {
     assert_eq!(
         clean("/Users/dpep/code/proj/src/db.rs:42"),
