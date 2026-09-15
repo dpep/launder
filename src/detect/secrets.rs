@@ -69,10 +69,52 @@ static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
+/// `Cookie:` / `Set-Cookie:` header; its `name=value` pairs are split below.
+static COOKIE_HEADER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\b(?:set-)?cookie\s*:(.*)").unwrap());
+
+static COOKIE_PAIR: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"([^=;\s]+)=([^;\s]+)").unwrap());
+
+/// `Set-Cookie` attributes, which carry no secret.
+const COOKIE_ATTRIBUTES: [&str; 5] = ["path", "domain", "expires", "max-age", "samesite"];
+
 const KEYED_MIN_LEN: usize = 8;
 const KEYED_MIN_ENTROPY: f64 = 3.0;
 
+/// Cookie values are opaque session material, so there is no entropy gate —
+/// only the length floor, which keeps preferences like `locale=en` readable.
+fn cookies(line: &str, out: &mut Vec<Candidate>) {
+    for caps in COOKIE_HEADER.captures_iter(line) {
+        let header = caps.get(1).unwrap();
+        for pair in COOKIE_PAIR.captures_iter(header.as_str()) {
+            let (name, val) = (&pair[1], pair.get(2).unwrap());
+            if val.len() < KEYED_MIN_LEN
+                || is_redaction_marker(val.as_str())
+                || COOKIE_ATTRIBUTES
+                    .iter()
+                    .any(|a| name.eq_ignore_ascii_case(a))
+            {
+                continue;
+            }
+            let start = header.start() + val.start();
+            out.push(Candidate {
+                start,
+                end: start + val.len(),
+                kind: Kind::Secret,
+                subtype: Some("cookie"),
+                action: Action::Number {
+                    ptype: PType::Token,
+                    value: val.as_str().to_string(),
+                },
+                rank: 30,
+            });
+        }
+    }
+}
+
 pub fn detect(line: &str, out: &mut Vec<Candidate>) {
+    cookies(line, out);
     for prefix in PREFIX_TOKENS.iter() {
         for m in prefix.re.find_iter(line) {
             out.push(Candidate {

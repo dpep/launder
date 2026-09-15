@@ -162,6 +162,28 @@ fn url_credential_with_empty_user_redacts_password_only() {
 }
 
 #[test]
+fn cookie_header_values_are_redacted() {
+    check(&[
+        (
+            "Cookie: _app_session=Qm7Tz9Lw2Xc4Vb6NHk3Jd8Ws1Qz5Pm7R",
+            "Cookie: _app_session=<TOKEN_1>",
+        ),
+        (
+            "Set-Cookie: _app_session=Qm7Tz9Lw2Xc4Vb6NHk3Jd8Ws1Qz5Pm7R; path=/; HttpOnly",
+            "Set-Cookie: _app_session=<TOKEN_1>; path=/; HttpOnly",
+        ),
+        (
+            "Cookie: locale=en; _app_session=Qm7Tz9Lw2Xc4Vb6NHk3Jd8Ws1Qz5Pm7R",
+            "Cookie: locale=en; _app_session=<TOKEN_1>",
+        ),
+        (
+            "Set-Cookie: sid=Qm7Tz9Lw2Xc4Vb6N; Domain=app.example.com; Expires=Wed, 21 Oct 2026 07:28:00 GMT",
+            "Set-Cookie: sid=<TOKEN_1>; Domain=app.example.com; Expires=Wed, 21 Oct 2026 07:28:00 GMT",
+        ),
+    ]);
+}
+
+#[test]
 fn macos_home_collapses_keeping_tail_and_line_number() {
     assert_eq!(
         clean("/Users/dpep/code/proj/src/db.rs:42"),
