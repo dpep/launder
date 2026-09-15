@@ -27,11 +27,13 @@ static PREFIX_TOKENS: LazyLock<Vec<Prefix>> = LazyLock::new(|| {
             r"\b(?:gh[pousr]_[A-Za-z0-9]{16,}|github_pat_[A-Za-z0-9_]{20,})\b",
             "github",
         ),
-        p(r"\bsk-[A-Za-z0-9]{20,}\b", "openai"),
+        // OpenAI and Anthropic: `sk-…`, `sk-proj-…`, `sk-ant-api03-…`. The body
+        // carries `-` and `_`, and may end in one, so there is no trailing `\b`.
+        p(r"\bsk-[A-Za-z0-9_\-]{20,}", "openai"),
         p(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b", "aws"),
         p(r"\bAIza[A-Za-z0-9_\-]{35}\b", "google"),
         p(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b", "slack"),
-        p(r"\b(?:sk|pk|rk)_live_[A-Za-z0-9]{16,}\b", "stripe"),
+        p(r"\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b", "stripe"),
         p(r"\bglpat-[A-Za-z0-9_\-]{20,}\b", "gitlab"),
         p(r"\bnpm_[A-Za-z0-9]{36}\b", "npm"),
         p(

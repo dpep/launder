@@ -183,6 +183,59 @@ fn cookie_header_values_are_redacted() {
     ]);
 }
 
+// Credential-shaped inputs are assembled with `concat!` so no literal token
+// sits in the source for push protection to flag.
+
+#[test]
+fn dashed_sk_prefix_keys_are_redacted() {
+    check(&[
+        (
+            concat!(
+                "key ",
+                "sk-",
+                "proj-",
+                "Hk3Jd8Ws1Qz5Pm7R-aB9xLq2Vt6Nc_4Ym8Tz9Lw2Xc done"
+            ),
+            "key <TOKEN_1> done",
+        ),
+        (
+            concat!(
+                "key ",
+                "sk-",
+                "ant-",
+                "api03-Hk3Jd8Ws1Qz5Pm7R-aB9xLq2Vt6Nc_4Ym8TzAA"
+            ),
+            "key <TOKEN_1>",
+        ),
+        (
+            concat!("key ", "sk-", "svcacct-", "Hk3Jd8Ws1Qz5Pm7RaB9xLq2Vt6Nc"),
+            "key <TOKEN_1>",
+        ),
+    ]);
+}
+
+#[test]
+fn stripe_test_and_restricted_keys_are_redacted() {
+    check(&[
+        (
+            concat!("sk_", "test_", "Hk3Jd8Ws1Qz5Pm7RaB9xLq2V"),
+            "<TOKEN_1>",
+        ),
+        (
+            concat!("rk_", "test_", "Hk3Jd8Ws1Qz5Pm7RaB9xLq2V"),
+            "<TOKEN_1>",
+        ),
+        (
+            concat!("rk_", "live_", "Hk3Jd8Ws1Qz5Pm7RaB9xLq2V"),
+            "<TOKEN_1>",
+        ),
+        (
+            concat!("pk_", "test_", "Hk3Jd8Ws1Qz5Pm7RaB9xLq2V"),
+            "<TOKEN_1>",
+        ),
+    ]);
+}
+
 #[test]
 fn macos_home_collapses_keeping_tail_and_line_number() {
     assert_eq!(
