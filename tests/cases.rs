@@ -123,6 +123,37 @@ fn keyed_value_keeps_trailing_close_paren() {
 }
 
 #[test]
+fn ruby_constants_are_not_ipv6() {
+    check(&[
+        (
+            "Processing by Api::V1::AccountsController#show as HTML",
+            "Processing by Api::V1::AccountsController#show as HTML",
+        ),
+        (
+            "class User < ActiveRecord::Base",
+            "class User < ActiveRecord::Base",
+        ),
+        (
+            "in 'RSpec::Core::Configuration#load_spec_files'",
+            "in 'RSpec::Core::Configuration#load_spec_files'",
+        ),
+        (
+            "peer 2001:db8:85a3::8a2e:370:7334 connected",
+            "peer <IP_1> connected",
+        ),
+        (
+            "connect to 2001:db8::1: refused",
+            "connect to <IP_1>: refused",
+        ),
+        (
+            "listening on [::1]:3000 and fe80::1%en0",
+            "listening on [::1]:3000 and fe80::1%en0",
+        ),
+        ("mac aa:bb:cc:dd:ee:ff", "mac <MAC_1>"),
+    ]);
+}
+
+#[test]
 fn macos_home_collapses_keeping_tail_and_line_number() {
     assert_eq!(
         clean("/Users/dpep/code/proj/src/db.rs:42"),

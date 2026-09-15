@@ -4,6 +4,7 @@
 //! `*.local/*.internal/*.corp` hostnames by default — over-scrubbing destroys a
 //! trace's usefulness.
 
+use std::net::Ipv6Addr;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -16,13 +17,11 @@ static EMAIL: LazyLock<Regex> =
 static IPV4: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\b(?:\d{1,3}\.){3}\d{1,3}\b").unwrap());
 
-/// IPv6: a full 8-group address or a `::`-compressed form. Deliberately does
-/// not match 6-group MAC-shaped strings.
+/// IPv6 candidate shape only; [`ipv6_at`] decides. Loose on purpose: `::`
+/// compression rules don't fit a regex, and `Ipv6Addr` parsing gets them right.
 static IPV6: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"(?i)\b(?:[0-9a-f]{1,4}:){7}[0-9a-f]{1,4}\b|(?:[0-9a-f]{1,4}:){1,7}:(?:[0-9a-f]{1,4}:?){0,6}",
-    )
-    .unwrap()
+    Regex::new(r"(?i)(?:[0-9a-f]{0,4}:){2,7}(?:(?:[0-9]{1,3}\.){3}[0-9]{1,3}|[0-9a-f]{1,4})?")
+        .unwrap()
 });
 
 static MAC: LazyLock<Regex> =
@@ -63,15 +62,13 @@ pub fn ip(line: &str, keep_private: bool, out: &mut Vec<Candidate>) {
         out.push(ip_candidate(m.start(), m.end(), text));
     }
     for m in IPV6.find_iter(line) {
-        let text = m.as_str();
-        // A MAC is not an IPv6 address.
-        if MAC.is_match(text) {
+        let Some((end, addr)) = ipv6_at(line, m.start(), m.end()) else {
+            continue;
+        };
+        if keep_private && is_private_v6(addr) {
             continue;
         }
-        if keep_private && is_private_v6(text) {
-            continue;
-        }
-        out.push(ip_candidate(m.start(), m.end(), text));
+        out.push(ip_candidate(m.start(), end, &line[m.start()..end]));
     }
 }
 
@@ -163,12 +160,35 @@ fn is_private_v4(o: [u8; 4]) -> bool {
     )
 }
 
-fn is_private_v6(s: &str) -> bool {
-    let lower = s.to_ascii_lowercase();
-    lower == "::1"                          // loopback
-        || lower.starts_with("fe80")        // link-local
-        || lower.starts_with("fc")          // unique-local fc00::/7
-        || lower.starts_with("fd")
+/// A real IPv6 address in `start..end`, returning the trimmed end. It must stand
+/// alone (so `ActiveRecord::Base` and `Api::V1::Accounts` are not addresses),
+/// have two or more hex groups (Ruby's `::Face` has one), and parse. A trailing
+/// single `:` is punctuation: `2001:db8::1: refused`.
+fn ipv6_at(line: &str, start: usize, mut end: usize) -> Option<(usize, Ipv6Addr)> {
+    let b = line.as_bytes();
+    let joins = |c: u8| c.is_ascii_alphanumeric() || c == b'_' || c == b':';
+    if start > 0 && (joins(b[start - 1]) || b[start - 1] == b'.') {
+        return None;
+    }
+    if end < b.len() && joins(b[end]) {
+        return None;
+    }
+    if b[end - 1] == b':' && b[end - 2] != b':' {
+        end -= 1;
+    }
+    let text = &line[start..end];
+    if text.split(':').filter(|g| !g.is_empty()).count() < 2 {
+        return None;
+    }
+    let addr: Ipv6Addr = text.parse().ok()?;
+    (!addr.is_unspecified()).then_some((end, addr))
+}
+
+fn is_private_v6(a: Ipv6Addr) -> bool {
+    let first = a.segments()[0];
+    a.is_loopback()
+        || first & 0xffc0 == 0xfe80 // link-local fe80::/10
+        || first & 0xfe00 == 0xfc00 // unique-local fc00::/7
 }
 
 fn is_token_boundary(line: &str, start: usize, end: usize) -> bool {
