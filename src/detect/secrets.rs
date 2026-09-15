@@ -15,12 +15,15 @@ use super::{Action, Candidate, Kind, PType};
 struct Prefix {
     re: Regex,
     subtype: &'static str,
+    /// Reject all-lowercase matches: kebab-case names share the shape.
+    needs_upper: bool,
 }
 
 static PREFIX_TOKENS: LazyLock<Vec<Prefix>> = LazyLock::new(|| {
     let p = |pat: &str, subtype| Prefix {
         re: Regex::new(pat).unwrap(),
         subtype,
+        needs_upper: false,
     };
     vec![
         p(
@@ -29,7 +32,10 @@ static PREFIX_TOKENS: LazyLock<Vec<Prefix>> = LazyLock::new(|| {
         ),
         // OpenAI and Anthropic: `sk-…`, `sk-proj-…`, `sk-ant-api03-…`. The body
         // carries `-` and `_`, and may end in one, so there is no trailing `\b`.
-        p(r"\bsk-[A-Za-z0-9_\-]{20,}", "openai"),
+        Prefix {
+            needs_upper: true,
+            ..p(r"\bsk-[A-Za-z0-9_\-]{20,}", "openai")
+        },
         p(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b", "aws"),
         p(r"\bAIza[A-Za-z0-9_\-]{35}\b", "google"),
         p(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b", "slack"),
@@ -127,6 +133,9 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
     cookies(line, out);
     for prefix in PREFIX_TOKENS.iter() {
         for m in prefix.re.find_iter(line) {
+            if prefix.needs_upper && !m.as_str().bytes().any(|b| b.is_ascii_uppercase()) {
+                continue;
+            }
             out.push(Candidate {
                 start: m.start(),
                 end: m.end(),

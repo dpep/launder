@@ -211,6 +211,11 @@ fn dashed_sk_prefix_keys_are_redacted() {
             concat!("key ", "sk-", "svcacct-", "Hk3Jd8Ws1Qz5Pm7RaB9xLq2Vt6Nc"),
             "key <TOKEN_1>",
         ),
+        // Kebab-case names are not keys.
+        (
+            "uses sk-learn-compatible-estimator-4",
+            "uses sk-learn-compatible-estimator-4",
+        ),
     ]);
 }
 
