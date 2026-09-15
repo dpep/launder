@@ -65,6 +65,64 @@ fn token_after_ansi_escape_is_redacted() {
 }
 
 #[test]
+fn quoted_keys_are_redacted() {
+    check(&[
+        (
+            r#"  Parameters: {"password"=>"Zq8vN2kLp4Rx"}"#,
+            r#"  Parameters: {"password"=>"<SECRET_1>"}"#,
+        ),
+        (
+            r#"{"api_key": "Qm7Tz9Lw2Xc4Vb6N"}"#,
+            r#"{"api_key": "<SECRET_1>"}"#,
+        ),
+        // Already-redacted markers are not secrets.
+        (
+            r#"  Parameters: {"password"=>"[FILTERED]"}"#,
+            r#"  Parameters: {"password"=>"[FILTERED]"}"#,
+        ),
+        ("password=<SECRET_1>", "password=<SECRET_1>"),
+    ]);
+}
+
+#[test]
+fn suffixed_and_env_key_names_are_redacted() {
+    check(&[
+        ("access_token=Hk3Jd8Ws1Qz5Pm7R", "access_token=<SECRET_1>"),
+        ("auth_token: Hk3Jd8Ws1Qz5Pm7R", "auth_token: <SECRET_1>"),
+        (
+            r#"{"refreshToken":"Hk3Jd8Ws1Qz5Pm7R"}"#,
+            r#"{"refreshToken":"<SECRET_1>"}"#,
+        ),
+        (
+            "SECRET_KEY_BASE=Hk3Jd8Ws1Qz5Pm7RaB9",
+            "SECRET_KEY_BASE=<SECRET_1>",
+        ),
+        (
+            "RAILS_MASTER_KEY=Hk3Jd8Ws1Qz5Pm7RaB9",
+            "RAILS_MASTER_KEY=<SECRET_1>",
+        ),
+        // `key` alone is not a credential word.
+        ("sort_key=created_at_desc_Z9", "sort_key=created_at_desc_Z9"),
+        (
+            "cache_key=views/users/1-20260915",
+            "cache_key=views/users/1-20260915",
+        ),
+    ]);
+}
+
+#[test]
+fn keyed_value_keeps_trailing_close_paren() {
+    check(&[
+        (
+            "CMD (backup.sh --token=Hk3Jd8Ws1Qz5Pm7R)",
+            "CMD (backup.sh --token=<SECRET_1>)",
+        ),
+        // A paren inside the value must not split it and leak the tail.
+        ("password=Zq8)vN2kLp4Rx", "password=<SECRET_1>"),
+    ]);
+}
+
+#[test]
 fn macos_home_collapses_keeping_tail_and_line_number() {
     assert_eq!(
         clean("/Users/dpep/code/proj/src/db.rs:42"),

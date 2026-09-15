@@ -58,9 +58,12 @@ static URL_CREDENTIAL: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// A suspicious key whose value should be entropy-checked (contextual scan).
+/// The key may carry a prefix (`access_token`, `refreshToken`, `SECRET_KEY_BASE`)
+/// and a closing quote (`"password"=>`, `"api_key":`). Bare `key` is not a
+/// credential word: `sort_key`, `cache_key` are not secrets.
 static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?i)\b(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret|auth[a-z]*)\b\s*[=:]\s*["']?([^\s,;"']+)"#,
+        r#"(?i)\b(?:[a-z0-9_\-]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|master[_-]?key|secret[_-]?key[_-]?base)|pwd|auth[a-z]*)\b["']?\s*(?:=>|[=:])\s*["']?([^\s,;"']+)"#,
     )
     .unwrap()
 });
@@ -128,9 +131,9 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
 
     for caps in KEYED_VALUE.captures_iter(line) {
         let val = caps.get(1).unwrap();
-        let text = val.as_str();
+        let text = trim_unbalanced_closers(val.as_str());
         // Preserve diagnostic IDs even under a suspicious key (§5).
-        if ids::is_uuid(text) {
+        if ids::is_uuid(text) || is_redaction_marker(text) {
             continue;
         }
         if text.chars().count() < KEYED_MIN_LEN || shannon_entropy(text) < KEYED_MIN_ENTROPY {
@@ -138,7 +141,7 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         }
         out.push(Candidate {
             start: val.start(),
-            end: val.end(),
+            end: val.start() + text.len(),
             kind: Kind::Secret,
             subtype: Some("keyed_entropy"),
             action: Action::Number {
@@ -148,6 +151,37 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
             rank: 20,
         });
     }
+}
+
+/// Drop closing brackets that end the value but opened outside it, as in
+/// `(--token=abc)`. A bracket inside the value stays, so no tail can leak.
+fn trim_unbalanced_closers(mut s: &str) -> &str {
+    while let Some(close) = s.chars().last() {
+        let open = match close {
+            ')' => '(',
+            ']' => '[',
+            '}' => '{',
+            _ => break,
+        };
+        if s.matches(close).count() <= s.matches(open).count() {
+            break;
+        }
+        s = &s[..s.len() - 1];
+    }
+    s
+}
+
+/// A value already redacted upstream: Rails' `[FILTERED]`, launder's `<SECRET_1>`.
+fn is_redaction_marker(s: &str) -> bool {
+    let inner = s
+        .strip_prefix('[')
+        .and_then(|r| r.strip_suffix(']'))
+        .or_else(|| s.strip_prefix('<').and_then(|r| r.strip_suffix('>')));
+    inner.is_some_and(|i| {
+        !i.is_empty()
+            && i.bytes()
+                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+    })
 }
 
 /// True if `line` begins (or continues) a PEM private-key block.
