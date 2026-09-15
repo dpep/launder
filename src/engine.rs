@@ -88,29 +88,32 @@ impl Engine {
         }
 
         // Phase A: every enabled detector except bare-username.
+        // Detectors read the escape-blanked view; replacements index `line`.
+        let view = detect::detection_view(line);
+        let text = view.as_ref();
         let mut candidates = Vec::new();
         if self.cfg.enabled(TypeGroup::Path) {
-            detect::paths::detect(line, &mut candidates);
+            detect::paths::detect(text, &mut candidates);
             if let Some((prefix, owner)) = &self.home {
-                detect::paths::detect_home_dir(line, prefix, owner, &mut candidates);
+                detect::paths::detect_home_dir(text, prefix, owner, &mut candidates);
             }
         }
         if secrets_on {
-            detect::secrets::detect(line, &mut candidates);
+            detect::secrets::detect(text, &mut candidates);
         }
         // Diagnostic-ID preservation always runs (it only ever keeps text).
-        detect::ids::detect(line, &mut candidates);
+        detect::ids::detect(text, &mut candidates);
         if self.cfg.enabled(TypeGroup::Email) {
-            detect::net::email(line, &mut candidates);
+            detect::net::email(text, &mut candidates);
         }
         if self.cfg.enabled(TypeGroup::Ip) {
-            detect::net::ip(line, self.cfg.keep_private_ips, &mut candidates);
+            detect::net::ip(text, self.cfg.keep_private_ips, &mut candidates);
         }
         if self.cfg.enabled(TypeGroup::Host) {
-            detect::net::host(line, &self.extra_hosts, &mut candidates);
+            detect::net::host(text, &self.extra_hosts, &mut candidates);
         }
         if self.cfg.enabled(TypeGroup::Mac) {
-            detect::net::mac(line, &mut candidates);
+            detect::net::mac(text, &mut candidates);
         }
 
         let resolved = resolve(candidates);
@@ -126,7 +129,7 @@ impl Engine {
 
         // Phase B: standalone usernames, over regions nothing else claimed.
         if self.cfg.enabled(TypeGroup::User) {
-            let bare = self.detect_bare_users(line, &covered);
+            let bare = self.detect_bare_users(text, &covered);
             for c in resolve(bare) {
                 findings.push(self.assign(line, &c));
             }

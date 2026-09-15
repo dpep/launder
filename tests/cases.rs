@@ -30,6 +30,40 @@ fn clean(input: &str) -> String {
     launder(Config::default(), input).0
 }
 
+/// Table-driven: every `(input, expected)` row gets a fresh engine; all
+/// mismatches are reported together.
+fn check(rows: &[(&str, &str)]) {
+    let failures: Vec<String> = rows
+        .iter()
+        .filter_map(|&(input, expected)| {
+            let got = clean(input);
+            (got != expected).then(|| {
+                format!("  input:    {input:?}\n  expected: {expected:?}\n  got:      {got:?}")
+            })
+        })
+        .collect();
+    assert!(
+        failures.is_empty(),
+        "{} row(s) failed:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+#[test]
+fn token_after_ansi_escape_is_redacted() {
+    check(&[
+        (
+            "\x1b[31mghp_Q7m2Xk9Lp4Rz8Wv1Tn\x1b[0m",
+            "\x1b[31m<TOKEN_1>\x1b[0m",
+        ),
+        (
+            "\x1b[1m\x1b[36mAuthorization: Bearer Zq8vN2kLp4RxQm7Tz9Lw\x1b[0m",
+            "\x1b[1m\x1b[36mAuthorization: Bearer <TOKEN_1>\x1b[0m",
+        ),
+    ]);
+}
+
 #[test]
 fn macos_home_collapses_keeping_tail_and_line_number() {
     assert_eq!(

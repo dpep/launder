@@ -6,10 +6,40 @@
 //! set by precedence. Numbering is assigned later, in the engine, so it follows
 //! first-seen order across the whole stream.
 
+use std::borrow::Cow;
+
 pub mod ids;
 pub mod net;
 pub mod paths;
 pub mod secrets;
+
+/// The line as detectors see it: ANSI CSI sequences (`\e[31m`) blanked to
+/// spaces, since the final letter would otherwise defeat a `\b` on the token
+/// after it. Same byte length, so spans still index the original line.
+pub fn detection_view(line: &str) -> Cow<'_, str> {
+    if !line.contains('\x1b') {
+        return Cow::Borrowed(line);
+    }
+    let mut bytes = line.as_bytes().to_vec();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] != 0x1b || bytes.get(i + 1) != Some(&b'[') {
+            i += 1;
+            continue;
+        }
+        let mut end = i + 2;
+        while end < bytes.len() && (0x20..=0x3f).contains(&bytes[end]) {
+            end += 1;
+        }
+        if end < bytes.len() && (0x40..=0x7e).contains(&bytes[end]) {
+            end += 1;
+        }
+        bytes[i..end].fill(b' ');
+        i = end;
+    }
+    // Only ASCII bytes were rewritten, so UTF-8 validity is unchanged.
+    Cow::Owned(String::from_utf8(bytes).expect("ASCII-only rewrite"))
+}
 
 /// A detected region of a line and what to do with it.
 #[derive(Debug, Clone)]
