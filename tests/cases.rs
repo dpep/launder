@@ -274,6 +274,34 @@ fn rails_sql_bind_values_are_redacted() {
 }
 
 #[test]
+fn author_is_not_an_auth_key() {
+    check(&[
+        ("author: Christopher Nolan", "author: Christopher Nolan"),
+        (
+            "authors=Christopher,Josephine",
+            "authors=Christopher,Josephine",
+        ),
+        ("auth=Hk3Jd8Ws1Qz5Pm7R", "auth=<SECRET_1>"),
+        ("basic_auth=Hk3Jd8Ws1Qz5Pm7R", "basic_auth=<SECRET_1>"),
+        ("authkey: Hk3Jd8Ws1Qz5Pm7R", "authkey: <SECRET_1>"),
+        ("authorization=Hk3Jd8Ws1Qz5Pm7R", "authorization=<SECRET_1>"),
+    ]);
+}
+
+#[test]
+fn shell_pwd_is_a_path_not_a_password() {
+    check(&[
+        ("PWD=/Users/dpep/code/proj", "PWD=~/code/proj"),
+        ("OLDPWD=/Users/dpep/code", "OLDPWD=~/code"),
+        (
+            "Server=db;Uid=sa;Pwd=Zq8vN2kLp4Rx;",
+            "Server=db;Uid=sa;Pwd=<SECRET_1>;",
+        ),
+        ("DB_PWD=Zq8vN2kLp4Rx", "DB_PWD=<SECRET_1>"),
+    ]);
+}
+
+#[test]
 fn macos_home_collapses_keeping_tail_and_line_number() {
     assert_eq!(
         clean("/Users/dpep/code/proj/src/db.rs:42"),

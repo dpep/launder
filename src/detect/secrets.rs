@@ -65,10 +65,10 @@ static URL_CREDENTIAL: LazyLock<Regex> = LazyLock::new(|| {
 /// and a closing quote (`"password"=>`, `"api_key":`), escaped or not
 /// (`\"token\":`). A quoted key may be followed by a comma, as in a Rails SQL
 /// bind `["token", "…"]`. Bare `key` is not a credential word: `sort_key`,
-/// `cache_key` are not secrets.
+/// `cache_key` are not secrets, and `auth` is spelled out so `author` is not.
 static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?i)\b(?:[a-z0-9_\-]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|master[_-]?key|secret[_-]?key[_-]?base)|pwd|auth[a-z]*)\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]))\s*\\*["']?([^\s,;"']+)"#,
+        r#"(?i)\b([a-z0-9_\-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|master[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]))\s*\\*["']?([^\s,;"']+)"#,
     )
     .unwrap()
 });
@@ -186,11 +186,11 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         return;
     }
     for caps in KEYED_VALUE.captures_iter(line) {
-        let val = caps.get(1).unwrap();
+        let (key, val) = (&caps[1], caps.get(2).unwrap());
         // A trailing `\` escapes the closing quote, as in `\"api_key\":\"…\"`.
         let text = trim_unbalanced_closers(val.as_str().trim_end_matches('\\'));
         // Preserve diagnostic IDs even under a suspicious key (§5).
-        if ids::is_uuid(text) || is_redaction_marker(text) {
+        if ids::is_uuid(text) || is_redaction_marker(text) || is_shell_cwd(key, text) {
             continue;
         }
         if text.chars().count() < KEYED_MIN_LEN || shannon_entropy(text) < KEYED_MIN_ENTROPY {
@@ -226,6 +226,15 @@ fn trim_unbalanced_closers(mut s: &str) -> &str {
         s = &s[..s.len() - 1];
     }
     s
+}
+
+/// The shell's `PWD=/…` / `OLDPWD=~/…`: a working directory, left for the path
+/// rules. ODBC's `Pwd=` is a password and rarely starts with a path.
+fn is_shell_cwd(key: &str, value: &str) -> bool {
+    ["pwd", "oldpwd"]
+        .iter()
+        .any(|k| key.eq_ignore_ascii_case(k))
+        && (value.starts_with('/') || value.starts_with('~'))
 }
 
 /// A value already redacted upstream: Rails' `[FILTERED]`, launder's `<SECRET_1>`.
