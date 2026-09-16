@@ -507,6 +507,58 @@ fn private_key_block_collapses() {
     assert_eq!(clean(input), "<PRIVATE_KEY>");
 }
 
+// The armor label carries a trailing " BLOCK" that the other PEM labels don't,
+// so a matcher tuned to "...PRIVATE KEY-----" misses it entirely.
+#[test]
+fn pgp_private_key_block_collapses() {
+    let input = concat!(
+        "-----BEGIN PGP ",
+        "PRIVATE KEY",
+        " BLOCK-----\n",
+        "lQOYBAABCAD6xN2kj9",
+        "\n-----END PGP ",
+        "PRIVATE KEY",
+        " BLOCK-----"
+    );
+    assert_eq!(clean(input), "<PRIVATE_KEY>");
+}
+
+/// Every armored private-key spelling collapses to one `<PRIVATE_KEY>`,
+/// regardless of what sits between "BEGIN"/"END" and the closing dashes.
+#[test]
+fn every_private_key_armor_label_collapses() {
+    for label in [
+        "RSA PRIVATE KEY",
+        "EC PRIVATE KEY",
+        "DSA PRIVATE KEY",
+        "OPENSSH PRIVATE KEY",
+        "PRIVATE KEY", // PKCS#8, unencrypted
+        "ENCRYPTED PRIVATE KEY",
+        "PGP PRIVATE KEY BLOCK",
+    ] {
+        let input = format!("-----BEGIN {label}-----\nYWJjZGVm\n-----END {label}-----");
+        assert_eq!(clean(&input), "<PRIVATE_KEY>", "label: {label}");
+    }
+}
+
+/// Armor that is NOT a private key must pass through untouched — over-matching
+/// (e.g. any `-----BEGIN`) would redact harmless public material.
+#[test]
+fn non_private_key_armor_is_not_redacted() {
+    for label in [
+        "CERTIFICATE",
+        "CERTIFICATE REQUEST",
+        "PUBLIC KEY",
+        "RSA PUBLIC KEY",
+        "PGP PUBLIC KEY BLOCK",
+        "PGP SIGNATURE",
+        "PGP MESSAGE",
+    ] {
+        let input = format!("-----BEGIN {label}-----\nYWJjZGVm\n-----END {label}-----");
+        assert_eq!(clean(&input), input, "label: {label}");
+    }
+}
+
 #[test]
 fn dry_run_passes_through_unchanged() {
     // The engine still produces findings; the caller chooses to echo input.

@@ -200,12 +200,8 @@ impl Engine {
     }
 
     fn continue_private_key(&mut self, line: &str) -> LineResult {
-        if detect::secrets::is_private_key_end(line) {
+        if let Some(after) = detect::secrets::private_key_end(line) {
             self.in_private_key = false;
-            let after = line
-                .find("PRIVATE KEY-----")
-                .map(|i| &line[i + "PRIVATE KEY-----".len()..])
-                .unwrap_or("");
             let output = if after.trim().is_empty() {
                 None
             } else {

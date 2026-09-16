@@ -259,6 +259,25 @@ fn is_redaction_marker(s: &str) -> bool {
     })
 }
 
+/// One rule for every armored private-key spelling — RSA, EC, DSA, OPENSSH,
+/// PKCS#8's bare `PRIVATE KEY`, `ENCRYPTED PRIVATE KEY`, and OpenPGP's
+/// `PGP PRIVATE KEY BLOCK` (the trailing " BLOCK" is why a literal
+/// `"PRIVATE KEY-----"` suffix match used to miss it) — instead of one literal
+/// per key type. A substring check also keeps `CERTIFICATE` and `PUBLIC KEY`
+/// armor (including `PGP PUBLIC KEY BLOCK`) out, since those aren't secrets.
+fn label_is_private_key(label: &str) -> bool {
+    label.contains("PRIVATE KEY")
+}
+
+/// Find the next `-----BEGIN`/`-----END` armor tag at or after `from`: its
+/// label text and the byte position just past the tag's closing dashes.
+fn find_tag<'a>(line: &'a str, tag: &str, from: usize) -> Option<(usize, &'a str, usize)> {
+    let tag_start = from + line[from..].find(tag)?;
+    let label_start = tag_start + tag.len();
+    let label_end = label_start + line[label_start..].find("-----")?;
+    Some((tag_start, &line[label_start..label_end], label_end + 5))
+}
+
 /// A PEM private key that starts on `line`: the byte span to redact, and
 /// whether the block continues onto the following lines.
 ///
@@ -267,14 +286,15 @@ fn is_redaction_marker(s: &str) -> bool {
 /// still scanned. `"-----BEGIN …-----\n" \` carries no key material after the
 /// escape, so it is a multi-line block like a bare header.
 pub fn private_key(line: &str) -> Option<(usize, usize, bool)> {
-    const MARKER: &str = "PRIVATE KEY-----";
-    let start = line.find("-----BEGIN")?;
-    let header_end = start + line[start..].find(MARKER)? + MARKER.len();
+    let (start, label, header_end) = find_tag(line, "-----BEGIN", 0)?;
+    if !label_is_private_key(label) {
+        return None;
+    }
     let rest = &line[header_end..];
-    if let Some(end) = rest.find("-----END")
-        && let Some(m) = rest[end..].find(MARKER)
+    if let Some((_, end_label, end_at)) = find_tag(rest, "-----END", 0)
+        && label_is_private_key(end_label)
     {
-        return Some((start, header_end + end + m + MARKER.len(), false));
+        return Some((start, header_end + end_at, false));
     }
     let body = rest.trim_start_matches(['\\', 'r', 'n']);
     let escaped = rest.starts_with('\\') && body.len() < rest.len();
@@ -287,9 +307,12 @@ pub fn private_key(line: &str) -> Option<(usize, usize, bool)> {
     Some((start, end, false))
 }
 
-/// True if `line` ends a PEM private-key block.
-pub fn is_private_key_end(line: &str) -> bool {
-    line.contains("-----END") && line.contains("PRIVATE KEY-----")
+/// If `line` closes an open PEM private-key block, the text following the
+/// closing tag (e.g. a trailing literal `\n` that belongs to the next
+/// logical line).
+pub fn private_key_end(line: &str) -> Option<&str> {
+    let (_, label, end) = find_tag(line, "-----END", 0)?;
+    label_is_private_key(label).then(|| &line[end..])
 }
 
 /// Shannon entropy in bits per character.
