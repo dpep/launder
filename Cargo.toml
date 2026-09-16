@@ -1,6 +1,6 @@
 [package]
 name = "launder"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 description = "Scrub identifying paths, secrets, and contacts from logs and stack traces, keeping everything a reader needs to help."
 license = "MIT"
