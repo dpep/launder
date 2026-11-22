@@ -738,3 +738,72 @@ fn identities_are_learned_with_path_disabled() {
         "/tmp/pytest-of-<USER_1>/x <EMAIL_1> <USER_1>"
     );
 }
+
+#[test]
+fn internal_host_label_must_end_the_name_or_mark_an_fqdn() {
+    check(&[
+        ("db-prod-01.internal", "<HOST_1>"),
+        ("ip-10-0-3-17.ec2.internal:5432", "<HOST_1>:5432"),
+        // Mid-name, followed by a domain: the whole FQDN is evidently internal.
+        (
+            "connect db-prod-01.internal.acme-corp.com:5432",
+            "connect <HOST_1>:5432",
+        ),
+        // File names are not hosts.
+        ("config/database.local.yml", "config/database.local.yml"),
+        (
+            "cp settings.local.json .env.local",
+            "cp settings.local.json .env.local",
+        ),
+    ]);
+}
+
+#[test]
+fn version_numbers_are_not_ips() {
+    check(&[
+        (
+            "Mozilla/5.0 Chrome/119.0.0.0 Safari/537.36",
+            "Mozilla/5.0 Chrome/119.0.0.0 Safari/537.36",
+        ),
+        ("version 1.2.3.4", "version 1.2.3.4"),
+        ("Version: 1.2.3.4", "Version: 1.2.3.4"),
+        // An address is still an address.
+        ("ip=8.8.4.4 from 8.8.8.8", "ip=<IP_1> from <IP_2>"),
+        ("http://8.8.8.8/x", "http://<IP_1>/x"),
+    ]);
+}
+
+#[test]
+fn scp_style_git_remote_is_not_an_email() {
+    check(&[
+        (
+            concat!("git", "@github.com:org/repo.git"),
+            concat!("git", "@github.com:org/repo.git"),
+        ),
+        (
+            concat!("git", "@github.com: Permission denied (publickey)."),
+            concat!("git", "@github.com: Permission denied (publickey)."),
+        ),
+        (
+            concat!("git", "@git.corp:org/repo.git"),
+            concat!("git", "@<HOST_1>:org/repo.git"),
+        ),
+        ("ops@dpep.io: bounced", "<EMAIL_1>: bounced"),
+    ]);
+}
+
+#[test]
+fn percent_encoded_emails_are_scrubbed_whole() {
+    check(&[
+        (
+            "GET /users?email=maria.garcia%40gmail.com&limit=10",
+            "GET /users?email=<EMAIL_1>&limit=10",
+        ),
+        (
+            "maria.garcia%40gmail.com maria.garcia@gmail.com",
+            "<EMAIL_1> <EMAIL_1>",
+        ),
+        ("mailto:%6Aane@customer.com", "mailto:<EMAIL_1>"),
+        ("-bob@dpep.io", "-<EMAIL_1>"),
+    ]);
+}
