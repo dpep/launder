@@ -1830,3 +1830,17 @@ fn a_login_is_scrubbed_only_where_it_logs_in() {
         )
     );
 }
+
+#[test]
+fn ci_runner_homes_are_system_paths() {
+    check(&[
+        (
+            "/home/runner/work/app/app/src/main.rs:3",
+            "/home/runner/work/app/app/src/main.rs:3",
+        ),
+        (
+            "/Users/runner/work/app/app/src/main.rs:3",
+            "/Users/runner/work/app/app/src/main.rs:3",
+        ),
+    ]);
+}

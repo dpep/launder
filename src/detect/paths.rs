@@ -40,8 +40,9 @@ static MACOS_TMPDIR: LazyLock<Regex> =
 static PYTEST_OF: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(&format!("/pytest-of-({NAME})")).unwrap());
 
-/// Segments directly under `/Users` that are system folders, not user homes.
-const NON_USER_HOMES: &[&str] = &["Shared"];
+/// Home-directory names that are system or CI accounts, not people: macOS
+/// `/Users/Shared`, and the GitHub Actions runner's `/home/runner`, `/Users/runner`.
+const NON_USER_HOMES: &[&str] = &["Shared", "runner"];
 
 pub fn detect(line: &str, out: &mut Vec<Candidate>) {
     for caps in UNIX_HOME.captures_iter(line) {
