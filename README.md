@@ -62,7 +62,7 @@ The bias is lopsided on purpose. Over-scrubbing a trace makes it useless, so pat
 - system paths (`/usr`, `/etc`, `/var/log`) and CI runner homes (`/home/runner`)
 - file extensions, relative paths, line and column numbers
 - UUIDs, git SHAs, request IDs
-- private and loopback IPs (`10.0.0.4`, `127.0.0.1`) unless you pass `--all-ips`
+- private, loopback, and multicast IPs (`10.0.0.4`, `127.0.0.1`, `ff02::1`) unless you pass `--all-ips`
 - version numbers that look like IPs (`Chrome/119.0.0.0`)
 - public hostnames (`api.github.com`, `db.acme-corp.com`)
 
@@ -171,7 +171,7 @@ Files are read in order; `-` or no files reads stdin. Bare `launder` at a termin
 | `--keep <TERM>` | Never scrub TERM, e.g. a public host. Secrets are scrubbed regardless |
 | `--only <TYPES>` | Scrub only these types: path,email,ip,host,mac,user (secrets always) |
 | `--except <TYPES>` | Scrub every type except these (same names as --only) |
-| `--all-ips` | Also scrub private and loopback IPs (kept by default) |
+| `--all-ips` | Also scrub private, loopback, and multicast IPs (kept by default) |
 
 `-n` doesn't combine with `-j`/`-J`, and `--with-originals` needs one of them. `--watch` and `--keep` repeat.
 

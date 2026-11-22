@@ -1,8 +1,8 @@
 //! Email, IP, hostname, and MAC detectors.
 //!
-//! Asymmetric bias: keep loopback + RFC1918 IPs and only the conservative
-//! `*.local/*.internal/*.corp` hostnames by default — over-scrubbing destroys a
-//! trace's usefulness.
+//! Asymmetric bias: keep loopback, RFC1918, and multicast IPs and only the
+//! conservative `*.local/*.internal/*.corp` hostnames by default —
+//! over-scrubbing destroys a trace's usefulness.
 
 use std::net::Ipv6Addr;
 use std::sync::LazyLock;
@@ -208,7 +208,8 @@ fn is_private_v4(o: [u8; 4]) -> bool {
         | [10, ..]                      // 10/8
         | [192, 168, ..]                // 192.168/16
         | [169, 254, ..]                // link-local
-        | [172, 16..=31, ..] // 172.16/12
+        | [172, 16..=31, ..]            // 172.16/12
+        | [224..=239, ..] // multicast 224/4
     )
 }
 
@@ -241,4 +242,5 @@ fn is_private_v6(a: Ipv6Addr) -> bool {
     a.is_loopback()
         || first & 0xffc0 == 0xfe80 // link-local fe80::/10
         || first & 0xfe00 == 0xfc00 // unique-local fc00::/7
+        || a.is_multicast() // ff00::/8
 }

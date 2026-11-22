@@ -487,6 +487,20 @@ fn public_ip_scrubbed_private_kept() {
 }
 
 #[test]
+fn multicast_ips_are_kept_unless_all_ips() {
+    let input = "mdns 224.0.0.251 ssdp 239.255.255.250 nd ff02::1 ff05::fb";
+    assert_eq!(clean(input), input);
+    let all = Config {
+        keep_private_ips: false,
+        ..Config::default()
+    };
+    assert_eq!(
+        launder(all, input).0,
+        "mdns <IP_1> ssdp <IP_2> nd <IP_3> <IP_4>"
+    );
+}
+
+#[test]
 fn secrets_never_expose_original_even_with_flag() {
     let cfg = Config {
         with_originals: true,

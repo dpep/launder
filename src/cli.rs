@@ -92,7 +92,7 @@ struct Cli {
     #[arg(long = "except", value_name = "TYPES", help_heading = "Scrubbing")]
     except: Option<String>,
 
-    /// Also scrub private and loopback IPs (kept by default).
+    /// Also scrub private, loopback, and multicast IPs (kept by default).
     #[arg(long = "all-ips", help_heading = "Scrubbing")]
     all_ips: bool,
 
