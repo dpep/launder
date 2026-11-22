@@ -108,7 +108,7 @@ fn login(user: regex::Match, out: &mut Vec<Candidate>) {
 /// The match ends where the value begins; [`value_span`] reads the value.
 static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?i)\b(([a-z0-9_\-]*)(password|passwd|passphrase|pass|pwd|secret|token|credentials?|signature|sig|session(?:[_-]?id)?|(?:api|access|account|private|master|encryption|signing)[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]))\s*"#,
+        r#"(?i)\b(([a-z0-9_\-]*)(password|passwd|passphrase|pass|pwd|secret|token|credentials?|signature|sig|session(?:[_-]?id)?|(?:api|access|account|private|master|encryption|signing)[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]|%3[ad]))\s*"#,
     )
     .unwrap()
 });
@@ -346,17 +346,12 @@ fn unquoted_span(line: &str, at: usize) -> (usize, usize) {
 /// Where a value ends at a following query parameter, `&name=`. A bare `&` is
 /// part of the value.
 fn query_param_end(s: &str) -> usize {
-    s.match_indices('&')
-        .map(|(i, _)| i)
-        .find(|&i| {
-            let tail = &s[i + 1..];
-            let name = tail
-                .find(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')))
-                .unwrap_or(tail.len());
-            name > 0 && tail[name..].starts_with('=')
-        })
-        .unwrap_or(s.len())
+    QUERY_PARAM.find(s).map_or(s.len(), |m| m.start())
 }
+
+/// `&name=`, or URL-encoded as `%26name%3D`.
+static QUERY_PARAM: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(?:&|%26)[a-z0-9_.\-]+(?:=|%3d)").unwrap());
 
 /// Drop closing brackets that end the value but opened outside it, as in
 /// `(--token=abc)`. A bracket inside the value stays, so no tail can leak.

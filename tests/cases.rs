@@ -1072,3 +1072,24 @@ fn keyed_cookie_values_are_redacted() {
         ),
     ]);
 }
+
+#[test]
+fn url_encoded_separators_are_keyed_values() {
+    check(&[
+        (
+            concat!(
+                "redirect=https%3A%2F%2Fx.io%2Fcb%3Faccess_token%3DZx9Yw8Vu7Ts6",
+                "Rq5Po4Nm3"
+            ),
+            "redirect=https%3A%2F%2Fx.io%2Fcb%3Faccess_token%3D<SECRET_1>",
+        ),
+        (
+            concat!("body: password%3dZx9Yw8Vu7Ts6", "Rq5Po4Nm3%26user%3Dbob"),
+            "body: password%3d<SECRET_1>%26user%3Dbob",
+        ),
+        (
+            concat!("api_key%3AZx9Yw8Vu7Ts6", "Rq5Po4Nm3"),
+            "api_key%3A<SECRET_1>",
+        ),
+    ]);
+}
