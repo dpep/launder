@@ -1718,3 +1718,17 @@ fn docker_hub_pat_is_redacted() {
         "echo <TOKEN_1> | docker login",
     )]);
 }
+
+#[test]
+fn docker_login_short_password_flag_is_redacted() {
+    check(&[
+        (
+            "docker login -u alice -p Zq8vN2kLp4Rx registry.example.com",
+            "docker login -u alice -p <PASSWORD_1> registry.example.com",
+        ),
+        ("docker login -p=hunter2", "docker login -p=<PASSWORD_1>"),
+        // `-p` elsewhere is a port, a path, a profile…
+        ("ssh -p 2222 host", "ssh -p 2222 host"),
+        ("docker run -p 8080:80 nginx", "docker run -p 8080:80 nginx"),
+    ]);
+}

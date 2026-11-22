@@ -185,6 +185,11 @@ static CURL_USER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"\bcurl\b.*?\s(?:-u|--user)(?:\s+|=)['"]?([^\s:'"]+):([^\s'"]+)"#).unwrap()
 });
 
+/// `docker login -p PASS`. Only after `docker login`: elsewhere `-p` is a
+/// port, a path, a profile.
+static DOCKER_LOGIN_P: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\bdocker\s+login\b.*?\s-p(?:\s+|=)").unwrap());
+
 /// A `.netrc` entry, and its `login` / `password` tokens.
 static NETRC_LINE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*(?:machine\s+\S+|default)\s").unwrap());
@@ -418,6 +423,10 @@ fn scan(line: &str, out: &mut Vec<Candidate>) {
     }
     for m in ENCODED_URL.find_iter(line) {
         encoded_url_credential(line, m.end(), out);
+    }
+    for m in DOCKER_LOGIN_P.find_iter(line) {
+        let span = value_span(line, m.end());
+        keyed(line, "password", "", "password", span, out);
     }
     // GitHub Actions' `::add-mask::VALUE` declares its value a secret.
     for (at, _) in line.match_indices("::add-mask::") {
