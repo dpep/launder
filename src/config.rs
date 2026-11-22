@@ -56,9 +56,15 @@ impl Default for Config {
     }
 }
 
+/// The types `--only` / `--except` name. Not `term`: only `--watch` makes
+/// one, and a named term is scrubbed whatever the filter says.
+fn filterable() -> impl Iterator<Item = Kind> {
+    Kind::ALL.into_iter().filter(|&k| k != Kind::Term)
+}
+
 /// The `--only` / `--except` vocabulary, comma-separated: `path,secret,…`.
 pub fn kind_names() -> String {
-    Kind::ALL.map(Kind::as_str).join(",")
+    filterable().map(Kind::as_str).collect::<Vec<_>>().join(",")
 }
 
 /// The longest type name, for aligning human-readable columns.
@@ -74,7 +80,7 @@ fn parse_kinds(list: &str) -> Result<HashSet<Kind>> {
     list.split(',')
         .map(|s| s.trim().to_ascii_lowercase())
         .filter(|s| !s.is_empty())
-        .map(|s| match Kind::ALL.into_iter().find(|k| k.as_str() == s) {
+        .map(|s| match filterable().find(|k| k.as_str() == s) {
             Some(kind) => Ok(kind),
             None => bail!("unknown type: {s} (want {})", kind_names()),
         })

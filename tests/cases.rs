@@ -634,6 +634,14 @@ fn only_filter_limits_types() {
     );
 }
 
+#[test]
+fn term_is_not_a_filterable_type() {
+    // Only --watch makes a term, and the filter never turns one off.
+    let err = Config::resolve_types(None, Some("term")).unwrap_err();
+    assert!(err.to_string().contains("unknown type: term"), "{err}");
+    assert!(!launder::config::kind_names().contains("term"));
+}
+
 /// Config with a local-identity watchlist (what the CLI builds by default).
 fn with_watchlist(usernames: &[&str], home: Option<&str>, hostnames: &[&str]) -> Config {
     Config {
@@ -1487,11 +1495,7 @@ fn watch_scrubs_terms_and_whole_domains() {
 #[test]
 fn watch_terms_are_scrubbed_whatever_only_and_except_say() {
     // The user named the term: --only / --except never turn it off.
-    for (only, except) in [
-        (None, Some("term")),
-        (None, Some("host")),
-        (Some("path"), None),
-    ] {
+    for (only, except) in [(None, Some("host")), (Some("path"), None)] {
         let cfg = Config {
             enabled: Config::resolve_types(only, except).unwrap(),
             ..with_terms(&["globex", "acme.com"], &[])
