@@ -373,8 +373,11 @@ fn cookies(line: &str, out: &mut Vec<Candidate>) {
     }
 }
 
-pub fn detect(line: &str, out: &mut Vec<Candidate>) {
+/// `known` are copies of secrets already seen; they merge with what the
+/// detectors find, so neither can leave part of the other raw.
+pub fn detect(line: &str, known: Vec<Candidate>, out: &mut Vec<Candidate>) {
     let from = out.len();
+    out.extend(known);
     scan(line, out);
     merge_overlaps(line, out, from);
 }

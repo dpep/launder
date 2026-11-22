@@ -1,14 +1,15 @@
 //! Per-line pipeline: detect → resolve → assign → emit.
 //!
 //! The engine owns the run-lifetime [`Registry`] and the small amount of
-//! cross-line state (the PEM private-key block). Identities discovered from a
+//! cross-line state (the PEM private-key block, secret values already seen,
+//! so a later copy is scrubbed too). Identities discovered from a
 //! home path are registered before standalone-username (bare) detection runs,
 //! so `user=<name>` on the same line still maps.
 
 use std::borrow::Cow;
 
 use crate::config::Config;
-use crate::detect::literal::{Boundary, Term};
+use crate::detect::literal::{Boundary, Exact, Term};
 use crate::detect::{self, Action, Candidate, Kind, resolve};
 use crate::registry::Registry;
 
@@ -53,7 +54,14 @@ pub struct Engine {
     keep: Vec<Term>,
     /// Searchers for the registry's bare usernames, in the same order.
     bare: Vec<Term>,
+    /// Secret values seen so far, each with the candidate that scrubs a copy.
+    secrets: Exact<Candidate>,
+    secret_count: usize,
 }
+
+/// The shortest secret value scrubbed again wherever it repeats; a shorter
+/// one (`password=test`) is too likely to be an ordinary word.
+const MIN_REPEAT_LEN: usize = 8;
 
 impl Engine {
     pub fn new(cfg: Config) -> Self {
@@ -76,6 +84,8 @@ impl Engine {
             watch: terms(&cfg.watch, Term::user),
             keep: terms(&cfg.keep, Term::user),
             bare: Vec::new(),
+            secrets: Exact::default(),
+            secret_count: 0,
             reg,
             cfg,
             line_no: 0,
@@ -98,6 +108,29 @@ impl Engine {
     /// Detect and replace over `line[skip..]`; findings and columns index the
     /// whole line, and the output is the laundered text from `skip` on.
     fn scan(&mut self, line: &str, skip: usize) -> LineResult {
+        let known = self.secret_count;
+        let result = self.scan_once(line, skip);
+        // A secret first seen on this line may repeat later in it: now that
+        // it is known, a second pass scrubs every copy.
+        let scrubbed = |s: usize, e: usize| {
+            result
+                .findings
+                .iter()
+                .any(|f| f.byte_start <= s && e <= f.byte_end)
+        };
+        if self.secret_count > known
+            && self
+                .secrets
+                .find(line)
+                .iter()
+                .any(|&(s, e, _)| !scrubbed(s, e))
+        {
+            return self.scan_once(line, skip);
+        }
+        result
+    }
+
+    fn scan_once(&mut self, line: &str, skip: usize) -> LineResult {
         // Phase A: every enabled detector except bare-username.
         // Detectors read the escape-blanked view; replacements index `line`.
         let mut view = detect::detection_view(line);
@@ -132,7 +165,7 @@ impl Engine {
         }
         // Secret detection always runs; it also finds logins (URL, curl,
         // .netrc), which are users.
-        detect::secrets::detect(text, &mut candidates);
+        detect::secrets::detect(text, self.known_secrets(text), &mut candidates);
         // Diagnostic-ID preservation always runs (it only ever keeps text).
         detect::ids::detect(text, &mut candidates);
         if self.cfg.enabled(Kind::Email) {
@@ -217,6 +250,9 @@ impl Engine {
             Action::FixedSecret(text) => text.to_string(),
             Action::Keep => return None,
         };
+        if kind.is_secret() {
+            self.enroll_secret(&original, c);
+        }
         Some(Finding {
             kind,
             subtype: c.subtype,
@@ -228,6 +264,30 @@ impl Engine {
             byte_start: c.start,
             byte_end: c.end,
         })
+    }
+
+    /// Remember a secret's value so later copies of it are scrubbed too.
+    fn enroll_secret(&mut self, value: &str, c: &Candidate) {
+        if value.len() < MIN_REPEAT_LEN || !matches!(c.action, Action::Number { .. }) {
+            return;
+        }
+        if self.secrets.insert(value, c.clone()) {
+            self.secret_count += 1;
+        }
+    }
+
+    /// Candidates for every copy of an already-seen secret in `text`.
+    fn known_secrets(&self, text: &str) -> Vec<Candidate> {
+        self.secrets
+            .find(text)
+            .into_iter()
+            .map(|(start, end, c)| Candidate {
+                start,
+                end,
+                rank: 0,
+                ..c.clone()
+            })
+            .collect()
     }
 
     /// Register the identities path candidates reveal without replacing them,

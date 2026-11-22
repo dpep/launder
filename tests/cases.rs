@@ -521,7 +521,7 @@ fn secrets_never_expose_original_even_with_flag() {
         "MIIEpAIBAAKCAQEA",
     ];
     let input = format!(
-        "token {}\npassword={}\n-----BEGIN RSA PRIVATE KEY-----\n{}\n-----END RSA PRIVATE KEY-----",
+        "token {}\npassword={}\n-----BEGIN RSA PRIVATE KEY-----\n{}\n-----END RSA PRIVATE KEY-----\nretry {1}",
         raw[0], raw[1], raw[2]
     );
     for format in [Format::Text, Format::Preview, Format::Json, Format::Ndjson] {
@@ -1010,6 +1010,31 @@ fn ambiguous_pass_words_keep_the_entropy_gate() {
             "bypass=enabled compass=northwest",
         ),
         ("token_type=bearer", "token_type=bearer"),
+    ]);
+}
+
+#[test]
+fn a_known_secret_is_scrubbed_wherever_it_repeats() {
+    check(&[
+        (
+            "DB_PASSWORD=Spring2026! retry Spring2026!\nlogin failed for Spring2026!",
+            "DB_PASSWORD=<PASSWORD_1> retry <PASSWORD_1>\nlogin failed for <PASSWORD_1>",
+        ),
+        (
+            concat!(
+                "GITHUB_TOKEN=ghp_AbCdEf0123456789",
+                "AbCdEf0123456789AbCd\nusing ghp_AbCdEf0123456789",
+                "AbCdEf0123456789AbCd."
+            ),
+            "GITHUB_TOKEN=<TOKEN_1>\nusing <TOKEN_1>.",
+        ),
+        // Exact case, whole tokens only.
+        (
+            "password=Spring2026!\nspring2026! XSpring2026!",
+            "password=<PASSWORD_1>\nspring2026! XSpring2026!",
+        ),
+        // A value too short to be told from prose stays put elsewhere.
+        ("password=abc\nabc def", "password=<PASSWORD_1>\nabc def"),
     ]);
 }
 

@@ -2,9 +2,64 @@
 //! user's `--watch` / `--keep` terms. Case-insensitive (see [`fold`]),
 //! boundary-checked, one prebuilt searcher per term.
 
+use std::collections::{BTreeMap, HashMap};
+
 use memchr::memmem::Finder;
 
 use super::{Action, Candidate, Label};
+
+/// Exact, case-sensitive strings matched as whole words ([`Boundary::Word`]).
+/// Looked up by length and hash rather than searched one by one, so a set
+/// that grows with the input stays cheap per line.
+#[derive(Debug)]
+pub struct Exact<T> {
+    by_len: BTreeMap<usize, HashMap<String, T>>,
+}
+
+impl<T> Default for Exact<T> {
+    fn default() -> Self {
+        Exact {
+            by_len: BTreeMap::new(),
+        }
+    }
+}
+
+impl<T> Exact<T> {
+    /// Add `s` unless already present; true if added.
+    pub fn insert(&mut self, s: &str, value: T) -> bool {
+        let set = self.by_len.entry(s.len()).or_default();
+        if set.contains_key(s) {
+            return false;
+        }
+        set.insert(s.to_string(), value);
+        true
+    }
+
+    /// Every bounded occurrence in `text`, with its value, by start.
+    pub fn find<'a>(&'a self, text: &str) -> Vec<(usize, usize, &'a T)> {
+        let b = text.as_bytes();
+        let word = |c: u8| c.is_ascii_alphanumeric() || c == b'_';
+        let mut out = Vec::new();
+        for start in 0..b.len() {
+            if (start > 0 && word(b[start - 1])) || !text.is_char_boundary(start) {
+                continue;
+            }
+            for (&len, set) in &self.by_len {
+                let end = start + len;
+                if end > b.len() {
+                    break;
+                }
+                if b.get(end).copied().is_some_and(word) || !text.is_char_boundary(end) {
+                    continue;
+                }
+                if let Some(value) = set.get(&text[start..end]) {
+                    out.push((start, end, value));
+                }
+            }
+        }
+        out
+    }
+}
 
 /// `--watch` terms: a domain → `<HOST_N>` (each distinct host its own number),
 /// any other term → `<TERM_N>`.

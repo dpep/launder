@@ -55,6 +55,8 @@ Numbers count per type in first-seen order, so a repeated value keeps its placeh
 
 A login (URL userinfo, `curl -u`, `.netrc`) is scrubbed where it logs in, not everywhere the word appears.
 
+A secret is scrubbed everywhere it appears after it's found, with the same placeholder: after `password: Spring2026!`, `login failed for Spring2026!` becomes `login failed for <PASSWORD_1>`. The match is exact (case and whole token) and needs 8 or more characters, so `password: test` doesn't take the word `test` with it.
+
 ## What it keeps
 
 The bias is lopsided on purpose. Over-scrubbing a trace makes it useless, so paths and addresses lean toward keeping:
@@ -76,7 +78,7 @@ launder is structural: it matches shapes, prefixes, and key words. It does not u
 - **Your company's public hostnames.** `api.acme-corp.com` looks like any other public host. `--watch acme-corp.com` fixes that (see below).
 - **Bare tokens.** A random string with no known prefix and no credential word next to it (`session q7Xr2mLp9vZ4tK8sW1nB expired`) stays.
 - **Identifier-shaped values.** A single word or camel-case value, even under a key (`secret=HunterTwo`, `client_id=OrderService`), stays; most of those are names, not secrets.
-- **A password repeated in free text.** `password: Spring2026!` is scrubbed; the same string later on a line with no password word is not.
+- **What comes before it's learned.** launder streams, so it can't go back: `Spring2026!` on a line above `password: Spring2026!` stays, as does `alice` above the first `/Users/alice`.
 - **Customer and account IDs.** `cus_48213`, `acct 99812231` stay.
 
 Read what you paste. launder makes that quick; it doesn't make it optional.
