@@ -294,3 +294,14 @@ fn non_utf8_launder_watch_keeps_its_terms_and_warns() {
     );
     assert!(String::from_utf8_lossy(&out.stderr).contains("LAUNDER_WATCH"));
 }
+
+#[test]
+fn messages_show_the_home_dir_as_tilde() {
+    let home = scratch("home-msg");
+    let missing = home.join(".ssh").join("id_rsa");
+    let out = launder().env("HOME", &home).arg(&missing).output().unwrap();
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(err.contains("reading ~/.ssh/id_rsa"), "{err}");
+    assert!(!err.contains(home.to_str().unwrap()), "{err}");
+}

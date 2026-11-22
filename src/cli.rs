@@ -115,9 +115,20 @@ pub fn run() -> ExitCode {
         Ok(scrubbed) if scrubbed && cli.check => ExitCode::from(1),
         Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
-            eprintln!("launder: {e:#}");
+            eprintln!("launder: {}", tilde(&format!("{e:#}")));
             ExitCode::from(2)
         }
+    }
+}
+
+/// `msg` with `$HOME/` shown as `~/`: an error that echoes an input path
+/// must not leak the home dir into a `2>&1 | pbcopy`.
+fn tilde(msg: &str) -> String {
+    match std::env::var("HOME") {
+        Ok(home) if !home.trim_end_matches('/').is_empty() => {
+            msg.replace(&format!("{}/", home.trim_end_matches('/')), "~/")
+        }
+        _ => msg.to_string(),
     }
 }
 
