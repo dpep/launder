@@ -58,9 +58,13 @@ impl Term {
         })
     }
 
-    /// A user-supplied term: a domain when it contains a dot, else a word.
+    /// A user-supplied term: a domain when it is dot-separated labels of
+    /// letters, digits, and `-`; else a word.
     pub fn user(term: &str) -> Option<Self> {
-        let boundary = if term.contains('.') {
+        let term = term.trim();
+        let label =
+            |l: &str| !l.is_empty() && l.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-');
+        let boundary = if term.contains('.') && term.split('.').all(label) {
             Boundary::Domain
         } else {
             Boundary::Word

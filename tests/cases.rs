@@ -1855,3 +1855,12 @@ fn ci_runner_homes_are_system_paths() {
         ),
     ]);
 }
+
+#[test]
+fn only_a_domain_shaped_watch_term_is_a_domain() {
+    let cfg = with_terms(&["a.b*c", "acme.com"], &[]);
+    assert_eq!(
+        launder(cfg, "x a.b*c y web.acme.com").0,
+        "x <TERM_1> y <HOST_1>"
+    );
+}
