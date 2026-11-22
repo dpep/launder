@@ -1343,6 +1343,33 @@ fn unterminated_private_key_ends_at_input_boundary() {
 }
 
 #[test]
+fn report_breaks_secrets_down_by_subtype() {
+    let input = concat!(
+        "ops@dpep.io ghp_AbCdEf01234567",
+        "89AbCdEf0123456789AbCd\n",
+        "ghp_ZyXwVu01234567",
+        "89AbCdEf0123456789AbCd password=Zq8vN2kL",
+        "p4RxQm7T"
+    );
+    let (_, findings) = launder(Config::default(), input);
+    let mut report = Report::new();
+    report.record(&findings);
+    assert_eq!(
+        report.render(),
+        concat!(
+            "launder: 4 replacements\n",
+            "  email   1\n",
+            "  secret  3  (github 2, keyed_entropy 1)",
+        )
+    );
+
+    let (_, one) = launder(Config::default(), "ops@dpep.io");
+    let mut report = Report::new();
+    report.record(&one);
+    assert_eq!(report.render(), "launder: 1 replacement\n  email   1");
+}
+
+#[test]
 fn dry_run_previews_each_replacement() {
     let input = concat!(
         "/Users/dpep/a.rs mail ops@dpep.io\n",

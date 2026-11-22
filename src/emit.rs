@@ -10,7 +10,7 @@ use std::io::{self, Write};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::detect::Kind;
+use crate::config;
 use crate::engine::{Finding, LineResult};
 use crate::report::Report;
 
@@ -175,11 +175,7 @@ impl<W: Write> Emitter<W> {
 /// `12:5     email   ops@dpep.io → <EMAIL_1>`. A secret shows its subtype in
 /// brackets, never its text.
 fn preview(f: &Finding) -> String {
-    let width = Kind::ALL
-        .map(|k| k.as_str().len())
-        .into_iter()
-        .max()
-        .unwrap_or(0);
+    let width = config::kind_width();
     let shown = match revealable(f) {
         Some(original) => original.to_string(),
         None => format!("[{}]", f.subtype.unwrap_or(f.kind.as_str())),

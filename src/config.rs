@@ -55,6 +55,15 @@ pub fn kind_names() -> String {
     Kind::ALL.map(Kind::as_str).join(",")
 }
 
+/// The longest type name, for aligning human-readable columns.
+pub fn kind_width() -> usize {
+    Kind::ALL
+        .map(|k| k.as_str().len())
+        .into_iter()
+        .max()
+        .unwrap_or(0)
+}
+
 fn parse_kinds(list: &str) -> Result<HashSet<Kind>> {
     list.split(',')
         .map(|s| s.trim().to_ascii_lowercase())
