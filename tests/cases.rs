@@ -1044,3 +1044,31 @@ fn uuid_under_a_credential_key_is_a_credential() {
         ),
     ]);
 }
+
+#[test]
+fn keyed_authorization_keeps_its_scheme() {
+    check(&[
+        (
+            r#"{"authorization":"Bearer Zq8vN2kLp4RxQm7Tz9Lw"}"#,
+            r#"{"authorization":"Bearer <SECRET_1>"}"#,
+        ),
+        (
+            r#"{"Authorization": "Token Zq8vN2kLp4RxQm7Tz9Lw", "ok": true}"#,
+            r#"{"Authorization": "Token <SECRET_1>", "ok": true}"#,
+        ),
+    ]);
+}
+
+#[test]
+fn keyed_cookie_values_are_redacted() {
+    check(&[
+        (
+            r#"{"cookie":"_gh_sess=Qm7Tz9Lw2Xc4Vb6NHk3Jd8Ws1Qz5Pm7R; locale=en","user":"bob"}"#,
+            r#"{"cookie":"_gh_sess=<TOKEN_1>; locale=en","user":"bob"}"#,
+        ),
+        (
+            r#"{"set-cookie": "sid=Qm7Tz9Lw2Xc4Vb6N; Path=/"}"#,
+            r#"{"set-cookie": "sid=<TOKEN_1>; Path=/"}"#,
+        ),
+    ]);
+}

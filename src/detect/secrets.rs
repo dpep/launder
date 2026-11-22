@@ -119,9 +119,10 @@ static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
 static KEYED_HINT: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)pass|pwd|secret|token|cred|sig|session|key|auth").unwrap());
 
-/// `Cookie:` / `Set-Cookie:` header; its `name=value` pairs are split below.
+/// `Cookie:` / `Set-Cookie:` header, or the same as a quoted key
+/// (`"cookie":"…"`); its `name=value` pairs are split below.
 static COOKIE_HEADER: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)\b(?:set-)?cookie\s*:(.*)").unwrap());
+    LazyLock::new(|| Regex::new(r#"(?i)\b(?:set-)?cookie\\*["']?\s*:\s*"#).unwrap());
 
 static COOKIE_PAIR: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"([^=;\s]+)=([^;\s]+)").unwrap());
@@ -135,9 +136,18 @@ const KEYED_MIN_ENTROPY: f64 = 3.0;
 /// Cookie values are opaque session material, so there is no entropy gate —
 /// only the length floor, which keeps preferences like `locale=en` readable.
 fn cookies(line: &str, out: &mut Vec<Candidate>) {
-    for caps in COOKIE_HEADER.captures_iter(line) {
-        let header = caps.get(1).unwrap();
-        for pair in COOKIE_PAIR.captures_iter(header.as_str()) {
+    for m in COOKIE_HEADER.find_iter(line) {
+        // A quoted value ends at its quote; a header runs to the end of the line.
+        let quoted = line[m.end()..]
+            .trim_start_matches('\\')
+            .starts_with(['"', '\'']);
+        let (start, end) = if quoted {
+            value_span(line, m.end())
+        } else {
+            (m.end(), line.len())
+        };
+        let header = &line[start..end];
+        for pair in COOKIE_PAIR.captures_iter(header) {
             let (name, val) = (&pair[1], pair.get(2).unwrap());
             if val.len() < KEYED_MIN_LEN
                 || is_redaction_marker(val.as_str())
@@ -147,7 +157,7 @@ fn cookies(line: &str, out: &mut Vec<Candidate>) {
             {
                 continue;
             }
-            let start = header.start() + val.start();
+            let start = start + val.start();
             out.push(Candidate {
                 start,
                 end: start + val.len(),
@@ -295,11 +305,19 @@ fn value_span(line: &str, at: usize) -> (usize, usize) {
     if let Some(q @ (b'"' | b'\'')) = rest.as_bytes().get(escapes).copied() {
         let body = at + escapes + 1;
         if let Some(len) = closing_quote(&line[body..], &rest[..=escapes], q) {
-            return (body, body + len);
+            return (body + scheme_len(&line[body..body + len]), body + len);
         }
         return unquoted_span(line, body);
     }
-    unquoted_span(line, at)
+    unquoted_span(line, at + scheme_len(rest))
+}
+
+/// An auth scheme before the credential (`Bearer …`), which stays readable.
+static AUTH_SCHEME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^(?:bearer|basic|token)\s+").unwrap());
+
+fn scheme_len(value: &str) -> usize {
+    AUTH_SCHEME.find(value).map_or(0, |m| m.end())
 }
 
 /// Offset of `close` (the opening quote with its escapes) in `body`. A bare
