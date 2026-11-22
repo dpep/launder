@@ -1864,3 +1864,14 @@ fn only_a_domain_shaped_watch_term_is_a_domain() {
         "x <TERM_1> y <HOST_1>"
     );
 }
+
+#[test]
+fn watch_terms_match_any_case_beyond_ascii() {
+    let cfg = || with_terms(&["zoë", "ÅSA"], &[]);
+    check_with(
+        cfg,
+        &[("Zoë ZOË zoë åsa", "<TERM_1> <TERM_1> <TERM_1> <TERM_2>")],
+    );
+    // A case pair of different byte lengths still leaves offsets intact.
+    check_with(cfg, &[("İ ZOË ops@dpep.io", "İ <TERM_1> <EMAIL_1>")]);
+}

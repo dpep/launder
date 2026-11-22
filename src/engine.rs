@@ -106,8 +106,8 @@ impl Engine {
             view = Cow::Owned(" ".repeat(skip) + &view[skip..]);
         }
         let text = view.as_ref();
-        // Literal terms match case-insensitively; ASCII lowering keeps offsets.
-        let lower = text.to_ascii_lowercase();
+        // Literal terms match case-insensitively; folding keeps offsets.
+        let lower = detect::literal::fold(text);
         let mut candidates = Vec::new();
         if secrets_on && let Some((start, end, continues)) = detect::secrets::private_key(text) {
             self.open_key = continues.then_some(0);

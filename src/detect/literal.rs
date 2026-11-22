@@ -1,6 +1,6 @@
 //! Literal-term matching: usernames and hostnames from the watchlist, and the
-//! user's `--watch` / `--keep` terms. ASCII case-insensitive, boundary-checked,
-//! one prebuilt searcher per term.
+//! user's `--watch` / `--keep` terms. Case-insensitive (see [`fold`]),
+//! boundary-checked, one prebuilt searcher per term.
 
 use memchr::memmem::Finder;
 
@@ -30,6 +30,24 @@ pub fn watch(watch: &[Term], lower: &str, out: &mut Vec<Candidate>) {
     }
 }
 
+/// Lowercase `s` without moving a byte: a char whose lowercase is a single
+/// char of the same UTF-8 length folds (`Ë` → `ë`), any other is left as is
+/// (`İ`, whose lowercase is longer), so spans in the result index `s`.
+pub fn fold(s: &str) -> String {
+    if s.is_ascii() {
+        return s.to_ascii_lowercase();
+    }
+    s.chars()
+        .map(|c| {
+            let mut lower = c.to_lowercase();
+            match (lower.next(), lower.next()) {
+                (Some(l), None) if l.len_utf8() == c.len_utf8() => l,
+                _ => c,
+            }
+        })
+        .collect()
+}
+
 /// What may sit on either side of a match.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Boundary {
@@ -51,7 +69,7 @@ pub struct Term {
 impl Term {
     /// `None` for an empty term.
     pub fn new(term: &str, boundary: Boundary) -> Option<Self> {
-        let lower = term.trim().to_ascii_lowercase();
+        let lower = fold(term.trim());
         (!lower.is_empty()).then(|| Term {
             finder: Finder::new(lower.as_bytes()).into_owned(),
             boundary,
@@ -76,7 +94,7 @@ impl Term {
         self.boundary == Boundary::Domain
     }
 
-    /// Byte spans of each match in `lower`, the ASCII-lowercased line.
+    /// Byte spans of each match in `lower`, the [`fold`]ed line.
     pub fn spans(&self, lower: &[u8]) -> Vec<(usize, usize)> {
         let len = self.finder.needle().len();
         let mut out = Vec::new();
