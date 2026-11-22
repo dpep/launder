@@ -265,3 +265,32 @@ fn a_watch_term_with_nothing_to_match_is_an_error() {
         assert!(err.contains("--watch"), "--watch {term:?}: {err}");
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_launder_watch_keeps_its_terms_and_warns() {
+    use std::os::unix::ffi::OsStrExt;
+    let out = launder()
+        .env(
+            "LAUNDER_WATCH",
+            std::ffi::OsStr::from_bytes(b"acme,m\xfcller"),
+        )
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(b"acme and m\xfcller\n")?;
+            child.wait_with_output()
+        })
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "<TERM_1> and <TERM_2>\n"
+    );
+    assert!(String::from_utf8_lossy(&out.stderr).contains("LAUNDER_WATCH"));
+}

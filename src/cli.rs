@@ -1,5 +1,6 @@
 //! Command-line surface: wire cli → reader → engine → emitter.
 
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::{self, BufWriter, IsTerminal, Write};
 use std::process::ExitCode;
@@ -193,7 +194,13 @@ fn watch_terms(cli: &Cli) -> Result<Vec<String>> {
             .map(str::to_string)
             .collect()
     };
-    let mut terms = split(&std::env::var("LAUNDER_WATCH").unwrap_or_default());
+    let env = std::env::var_os("LAUNDER_WATCH").unwrap_or_default();
+    let env = env.to_str().map(Cow::Borrowed).unwrap_or_else(|| {
+        // Lossy, like input lines, so a term still matches the text it names.
+        eprintln!("launder: LAUNDER_WATCH is not valid UTF-8; reading it lossily");
+        env.to_string_lossy()
+    });
+    let mut terms = split(&env);
     for value in &cli.watch {
         let found = split(value);
         if found.is_empty() {
