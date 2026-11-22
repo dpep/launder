@@ -10,9 +10,9 @@ diagnostic IDs). Read [README.md](README.md) for the product vision.
 
 - **Paste-safe diagnostics, not a PII platform.** That framing is the whole
   design — small, fast, structural-only. Everything detected is structural
-  (patterns, structural validation, entropy, system lookup). No ML, no NER, no person-name
-  or street-address detection. Free-text detection is a later, pluggable hook,
-  never core.
+  (patterns, structural validation, key words, system lookup). No ML, no NER, no
+  person-name or street-address detection. Free-text detection is a later,
+  pluggable hook, never core.
 - **No persistence. No mapping file on disk, ever.** Consistency is per-run
   only; the registry lives in memory and is discarded at exit. A persisted map
   is a re-identification key — never write one. No network, no telemetry, no
@@ -35,9 +35,10 @@ diagnostic IDs). Read [README.md](README.md) for the product vision.
 ## Language and toolchain
 
 Rust, single statically-linkable binary, no runtime deps. `regex` for matching,
-`serde`/`serde_json` for structured output, `clap` for the CLI, `anyhow` for
-errors. Compile regex sets once via `std::sync::LazyLock`. The environment and
-hostname are read directly — no crate.
+`memchr` for literal-term search, `serde`/`serde_json` for structured output,
+`clap` + `clap_complete` for the CLI and completions, `anyhow` for errors.
+Compile regex sets once via `std::sync::LazyLock`. The environment is read
+directly and the hostname from the `hostname` command — no crate.
 
 This machine's Rust came via Homebrew's keg-only `rustup`, so `cargo` may not be
 on `PATH`. Either add it once —
@@ -59,7 +60,7 @@ launder/
   src/
     main.rs        ← shim: calls cli::run
     lib.rs         ← module list (tests drive the library)
-    cli.rs         ← clap (derive) surface + run loop: reader → engine → emitter
+    cli.rs         ← clap (derive) surface, --help, run loop: reader → engine → emitter
     config.rs      ← resolved run config + --only/--except type filter
     input.rs       ← streaming line reader over stdin/files
     engine.rs      ← per-line detect → resolve → assign → emit
@@ -67,14 +68,16 @@ launder/
     detect/
       mod.rs       ← Candidate/Kind/Action/Label types, precedence/overlap resolution
       paths.rs     ← home/user/tmpdir collapse
-      secrets.rs   ← prefixes, jwt, keys, url-creds, keyed entropy
+      secrets.rs   ← prefixes, jwt, private keys, logins, keyed values
       net.rs       ← email, ip (private-keep), host, mac
       ids.rs       ← UUID/SHA recognizers used to PRESERVE diagnostic IDs
+      literal.rs   ← case-insensitive term matcher: watchlist, --watch, --keep
     watchlist.rs   ← local-identity signal: $USER/$HOME/hostname
-    emit.rs        ← structured-output writers + the secret rule
+    emit.rs        ← text / --dry-run / JSON writers + the secret rule
     report.rs      ← --report summary
   tests/
     cases.rs       ← table-driven gold acceptance tests
+    cli.rs         ← binary-level tests: streaming, exit codes, help
 ```
 
 Keep it a single crate until there's a concrete reason to split. Simpler wins.
@@ -84,7 +87,7 @@ Keep it a single crate until there's a concrete reason to split. Simpler wins.
 ```sh
 cargo build                 # dev build → target/debug/launder
 cargo build --release       # optimized → target/release/launder
-cargo test                  # unit + acceptance tests
+cargo test                  # unit, acceptance, and binary tests
 cargo clippy --all-targets  # lint — keep it clean
 cargo fmt                   # format — run before committing
 ```
@@ -97,11 +100,15 @@ Before committing: `cargo fmt && cargo clippy --all-targets -- -D warnings && ca
   laundered output for an `(input, flags)` pair, and determinism is part of the
   assertion. Add a row when you add behavior.
 - Prefer driving the library (`Engine::process_line`) in tests over shelling out
-  to the binary — faster, deterministic, no permission prompts.
+  to the binary — faster, deterministic, no permission prompts. Behavior only
+  the real process shows (streaming timing, exit codes, help, completions)
+  lives in `tests/cli.rs`.
 - Use generic, non-identifying test data (`dpep`, `alice`, `ops@dpep.io`) — this
   is a public repo, and the sample `dpep` is fine as a stand-in.
-- The "no raw secret in any mode" invariant has a dedicated test. Never weaken
-  it.
+- The "no raw secret in any mode" invariant has a dedicated test
+  (`secrets_never_expose_original_even_with_flag`). Never weaken it.
+- README examples are real output. When behavior changes, re-run them with a
+  fake identity (`HOME=/Users/dpep USER=dpep`) and paste what comes back.
 
 ## Landing changes
 
@@ -123,12 +130,12 @@ only minor or patch bumps, never major:
 Repo-only docs (README, CLAUDE.md) don't bump — they don't change what `brew`
 builds.
 
-A bump is three edits, landed together:
-
-1. `Cargo.toml` `version`
-2. `Cargo.lock` — run `cargo build` so the `launder` entry updates
-3. the Homebrew formula `version` in
-   `~/code/lib/homebrew-tools/Formula/launder.rb` (push the tap too)
+Release with `release` (`~/.claude/bin/release`) from the repo root:
+`release patch --steps` shows the checklist, `--dry-run` previews it, and
+`release patch` runs it. It bumps `Cargo.toml` and `Cargo.lock`, tags,
+publishes, and updates the tap formula
+(`~/code/lib/homebrew-tools/Formula/launder.rb`, which pins the tag's tarball
+and sha256). Don't do the steps by hand.
 
 ## Scope boundaries (out of scope for v1)
 
