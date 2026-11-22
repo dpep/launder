@@ -61,9 +61,10 @@ static AUTH_HEADER: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Credentials in a URL / connection string: redact only the password. The
-/// user may be empty, as in `redis://:pass@host`.
+/// user may be empty, as in `redis://:pass@host`. The password runs to the
+/// last `@` of the authority, so an unencoded `@` in it can't leak its tail.
 static URL_CREDENTIAL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"[a-zA-Z][a-zA-Z0-9+.\-]*://[^:/@\s'"]*:([^@/\s'"]+)@"#).unwrap()
+    Regex::new(r#"[a-zA-Z][a-zA-Z0-9+.\-]*://[^:/@\s'"]*:([^/?#\s'"]+)@"#).unwrap()
 });
 
 /// A suspicious key whose value should be entropy-checked (contextual scan).
@@ -181,7 +182,10 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
             start: pass.start(),
             end: pass.end(),
             subtype: Some("url_credential"),
-            action: Action::FixedSecret("<PASSWORD>"),
+            action: Action::Number {
+                label: Label::Password,
+                value: pass.as_str().to_string(),
+            },
             rank: 40,
         });
     }

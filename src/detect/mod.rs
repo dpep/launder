@@ -145,7 +145,7 @@ pub enum Action {
     PathUser { user: String },
     /// A standalone username occurrence → `<USER_N>` (identity already known).
     BareUser { user: String },
-    /// An unnumbered secret placeholder: `<PASSWORD>`, `<PRIVATE_KEY>`.
+    /// An unnumbered secret placeholder: `<PRIVATE_KEY>`.
     FixedSecret(&'static str),
     /// Preserve the original text; the span only blocks weaker detectors.
     Keep,
@@ -157,6 +157,7 @@ pub enum Label {
     Token,
     Jwt,
     Secret,
+    Password,
     Email,
     Ip,
     Host,
@@ -169,6 +170,7 @@ impl Label {
             Label::Token => "TOKEN",
             Label::Jwt => "JWT",
             Label::Secret => "SECRET",
+            Label::Password => "PASSWORD",
             Label::Email => "EMAIL",
             Label::Ip => "IP",
             Label::Host => "HOST",
@@ -178,7 +180,7 @@ impl Label {
 
     pub fn kind(self) -> Kind {
         match self {
-            Label::Token | Label::Jwt | Label::Secret => Kind::Secret,
+            Label::Token | Label::Jwt | Label::Secret | Label::Password => Kind::Secret,
             Label::Email => Kind::Email,
             Label::Ip => Kind::Ip,
             Label::Host => Kind::Host,

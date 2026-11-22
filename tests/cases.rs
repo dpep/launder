@@ -167,7 +167,7 @@ fn ruby_constants_are_not_ipv6() {
 fn url_credential_with_empty_user_redacts_password_only() {
     check(&[(
         "redis://:Zq8vN2kLp4Rx@cache.example.com:6379/0",
-        "redis://:<PASSWORD>@cache.example.com:6379/0",
+        "redis://:<PASSWORD_1>@cache.example.com:6379/0",
     )]);
 }
 
@@ -440,7 +440,7 @@ fn repeated_token_reuses_placeholder() {
 fn url_credential_redacts_only_the_password() {
     assert_eq!(
         clean("postgres://app:s3cr3t@db:5432/x"),
-        "postgres://app:<PASSWORD>@db:5432/x"
+        "postgres://app:<PASSWORD_1>@db:5432/x"
     );
 }
 
@@ -806,4 +806,40 @@ fn percent_encoded_emails_are_scrubbed_whole() {
         ("mailto:%6Aane@customer.com", "mailto:<EMAIL_1>"),
         ("-bob@dpep.io", "-<EMAIL_1>"),
     ]);
+}
+
+// Secrets detection: credentials in URLs, keyed values, CLI and file forms.
+
+#[test]
+fn url_password_runs_to_the_last_at_before_the_host() {
+    check(&[
+        (
+            concat!("postgres://app:p@s", "s@db1.example.com/app"),
+            "postgres://app:<PASSWORD_1>@db1.example.com/app",
+        ),
+        // The authority ends at the path: a later `@` stays in the path.
+        (
+            concat!(
+                "https://app:Zq8vN2",
+                "kLp4Rx@registry.example.com/@babel/core"
+            ),
+            "https://app:<PASSWORD_1>@registry.example.com/@babel/core",
+        ),
+    ]);
+}
+
+#[test]
+fn url_passwords_are_numbered_per_value() {
+    check(&[(
+        concat!(
+            "redis://:Zq8vN2kLp4Rx@a.example.com ",
+            "redis://:Hk3Jd8Ws1Qz5@b.example.com ",
+            "redis://:Zq8vN2kLp4Rx@c.example.com"
+        ),
+        concat!(
+            "redis://:<PASSWORD_1>@a.example.com ",
+            "redis://:<PASSWORD_2>@b.example.com ",
+            "redis://:<PASSWORD_1>@c.example.com"
+        ),
+    )]);
 }
