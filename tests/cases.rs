@@ -1977,6 +1977,32 @@ fn a_keyed_token_keeps_its_number_and_the_text_after_it() {
             ),
             "token=<TOKEN_1>",
         ),
+        // A short or word-shaped tail can still be secret material.
+        (
+            concat!(
+                "password=ghp_aaaaaaaaaaaaaaaa",
+                "aaaaaaaaaaaaaaaaaaaa:hunter2"
+            ),
+            "password=<TOKEN_1>",
+        ),
+        (
+            concat!("api_key=AKIAIOSFODNN7EXA", "MPLE:wJalrXU"),
+            "api_key=<TOKEN_1>",
+        ),
+        (
+            concat!(
+                "token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.",
+                "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U.Zx9Q"
+            ),
+            "token=<JWT_1>",
+        ),
+        (
+            concat!(
+                "token=ghp_aaaaaaaaaaaaaaaa",
+                "aaaaaaaaaaaaaaaaaaaa:abcdefghijklmnopqrstuv"
+            ),
+            "token=<TOKEN_1>",
+        ),
         (
             concat!(
                 "token=ghp_aaaaaaaaaaaaaaaa",

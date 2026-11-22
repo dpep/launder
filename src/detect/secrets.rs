@@ -416,14 +416,18 @@ fn merge_overlaps(line: &str, out: &mut Vec<Candidate>, from: usize) {
     out.extend(logins);
 }
 
-/// Text a greedy value ran on into past the secret it holds: punctuation that
-/// can't continue the token (`:`, `.`, `|`), then nothing a secret could be
-/// (`:42`, `.`, `|grep`). `%2B…` or `:Zx9…` continue it.
+/// Text a greedy value ran on into past the secret it holds: a sentence end
+/// (`.`), a line number (`:42`), or a shell pipe/separator (`|grep`). Anything
+/// else (`:hunter2`, `.Zx9Q`, `%2B…`) may be secret material and stays merged.
 fn is_diagnostic_tail(tail: &str) -> bool {
     let rest = tail.trim_start_matches(|c: char| {
         c.is_ascii_punctuation() && !matches!(c, '+' | '/' | '=' | '%' | '-' | '_')
     });
-    rest.len() < tail.len() && (rest.chars().count() < KEYED_MIN_LEN || is_identifier_shaped(rest))
+    let punct = &tail[..tail.len() - rest.len()];
+    !punct.is_empty()
+        && (rest.is_empty()
+            || rest.bytes().all(|b| b.is_ascii_digit())
+            || punct.contains(['|', ';', '&', '>', '<', ')']))
 }
 
 fn scan(line: &str, out: &mut Vec<Candidate>) {
