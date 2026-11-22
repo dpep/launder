@@ -1210,10 +1210,14 @@ fn more_known_prefix_tokens_are_redacted() {
         ),
         (
             concat!(
-                "shpat_1a2b3c4d5e6f", "7a8b9c0d1e2f3a4b5c6d ",
-                "shpss_1a2b3c4d5e6f", "7a8b9c0d1e2f3a4b5c6e ",
-                "shpca_1a2b3c4d5e6f", "7a8b9c0d1e2f3a4b5c6f ",
-                "shppa_1a2b3c4d5e6f", "7a8b9c0d1e2f3a4b5c60"
+                "shpat_1a2b3c4d5e6f",
+                "7a8b9c0d1e2f3a4b5c6d ",
+                "shpss_1a2b3c4d5e6f",
+                "7a8b9c0d1e2f3a4b5c6e ",
+                "shpca_1a2b3c4d5e6f",
+                "7a8b9c0d1e2f3a4b5c6f ",
+                "shppa_1a2b3c4d5e6f",
+                "7a8b9c0d1e2f3a4b5c60"
             ),
             "<TOKEN_1> <TOKEN_2> <TOKEN_3> <TOKEN_4>",
         ),
