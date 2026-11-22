@@ -5,12 +5,11 @@ use std::io::{self, BufWriter, Write};
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::Parser;
-use serde_json::json;
+use clap::{ArgGroup, Parser};
 
 use crate::config::{self, Config};
-use crate::emit;
-use crate::engine::{Engine, Finding};
+use crate::emit::{Emitter, Format};
+use crate::engine::Engine;
 use crate::input::{Input, LineReader};
 use crate::report::Report;
 use crate::watchlist::Watchlist;
@@ -19,6 +18,7 @@ use crate::watchlist::Watchlist;
 /// keeping everything a reader needs to help.
 #[derive(Debug, Parser)]
 #[command(name = "launder", version, about)]
+#[command(group(ArgGroup::new("structured").args(["json", "ndjson"])))]
 struct Cli {
     /// Input files (stdin if none).
     files: Vec<String>,
@@ -47,20 +47,20 @@ struct Cli {
     #[arg(short = 'r', long = "report")]
     report: bool,
 
-    /// Detect and report, but pass input through unchanged.
-    #[arg(short = 'n', long = "dry-run")]
+    /// Preview each replacement instead of printing the text (shows originals).
+    #[arg(short = 'n', long = "dry-run", conflicts_with_all = ["json", "ndjson"])]
     dry_run: bool,
 
-    /// Buffered JSON: one object {laundered, findings, summary}.
+    /// Pretty JSON: {lines: [{line, text, findings}], summary}, written at EOF.
     #[arg(short = 'j', long = "json", conflicts_with = "ndjson")]
     json: bool,
 
-    /// Streaming NDJSON: one finding per line, as encountered.
+    /// Streaming JSON: one {line, text, findings} row per line, then a summary.
     #[arg(short = 'J', long = "ndjson")]
     ndjson: bool,
 
-    /// Include original values in JSON (never for secrets).
-    #[arg(long = "with-originals")]
+    /// Add each finding's original text to JSON (never for secrets).
+    #[arg(long = "with-originals", requires = "structured")]
     with_originals: bool,
 }
 
@@ -75,12 +75,6 @@ pub fn run() -> ExitCode {
     }
 }
 
-enum Mode {
-    Text,
-    Json,
-    Ndjson,
-}
-
 fn execute(cli: &Cli) -> Result<()> {
     let enabled = Config::resolve_types(cli.only.as_deref(), cli.except.as_deref())?;
     let cfg = Config {
@@ -91,26 +85,25 @@ fn execute(cli: &Cli) -> Result<()> {
         // a watchlist of known-identifying tokens, never pinned. Offline.
         watchlist: Watchlist::from_env(),
     };
-    let mode = if cli.json {
-        Mode::Json
+    let format = if cli.dry_run {
+        Format::Preview
+    } else if cli.json {
+        Format::Json
     } else if cli.ndjson {
-        Mode::Ndjson
+        Format::Ndjson
     } else {
-        Mode::Text
+        Format::Text
     };
 
-    let mut engine = Engine::new(cfg.clone());
     let mut reader = LineReader::new(&cli.files);
-    let mut out = open_output(cli.output.as_deref(), &cli.files)?;
+    let out = open_output(cli.output.as_deref(), &cli.files)?;
+    let mut emitter = Emitter::new(out, format, cfg.with_originals);
+    let mut engine = Engine::new(cfg);
     let mut report = Report::new();
-
-    // Accumulators for buffered JSON mode.
-    let mut laundered = String::new();
-    let mut all_findings: Vec<Finding> = Vec::new();
 
     loop {
         if reader.would_block() {
-            out.flush()?;
+            emitter.flush()?;
         }
         let line = match reader.read()? {
             None => break,
@@ -127,48 +120,9 @@ fn execute(cli: &Cli) -> Result<()> {
         };
         let result = engine.process_line(&line);
         report.record(&result.findings);
-
-        match mode {
-            Mode::Text => {
-                if cli.dry_run {
-                    writeln!(out, "{line}")?;
-                } else if let Some(text) = &result.output {
-                    writeln!(out, "{text}")?;
-                }
-            }
-            Mode::Ndjson => {
-                for f in &result.findings {
-                    let value = emit::finding_to_json(f, cfg.with_originals);
-                    writeln!(out, "{value}")?;
-                }
-            }
-            Mode::Json => {
-                if cli.dry_run {
-                    laundered.push_str(&line);
-                    laundered.push('\n');
-                } else if let Some(text) = &result.output {
-                    laundered.push_str(text);
-                    laundered.push('\n');
-                }
-                all_findings.extend(result.findings);
-            }
-        }
+        emitter.line(&result)?;
     }
-
-    if let Mode::Json = mode {
-        let findings: Vec<_> = all_findings
-            .iter()
-            .map(|f| emit::finding_to_json(f, cfg.with_originals))
-            .collect();
-        let obj = json!({
-            "laundered": laundered,
-            "findings": findings,
-            "summary": emit::summary_to_json(&report),
-        });
-        writeln!(out, "{obj}")?;
-    }
-
-    out.flush()?;
+    emitter.finish(&report)?;
 
     if cli.report {
         eprintln!("{}", report.render());

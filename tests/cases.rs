@@ -7,7 +7,9 @@
 
 use launder::config::Config;
 use launder::detect::Kind;
+use launder::emit::{Emitter, Format};
 use launder::engine::{Engine, Finding};
+use launder::report::Report;
 use launder::watchlist::Watchlist;
 
 /// Launder a whole multi-line input with the given config; return the joined
@@ -24,6 +26,22 @@ fn launder(cfg: Config, input: &str) -> (String, Vec<Finding>) {
         findings.extend(r.findings);
     }
     (out.join("\n"), findings)
+}
+
+/// Launder `input` with the default config through an [`Emitter`]; return
+/// everything it writes.
+fn emit(format: Format, with_originals: bool, input: &str) -> String {
+    let mut engine = Engine::new(Config::default());
+    let mut report = Report::new();
+    let mut buf = Vec::new();
+    let mut emitter = Emitter::new(&mut buf, format, with_originals);
+    for line in input.lines() {
+        let r = engine.process_line(line);
+        report.record(&r.findings);
+        emitter.line(&r).unwrap();
+    }
+    emitter.finish(&report).unwrap();
+    String::from_utf8(buf).unwrap()
 }
 
 /// Convenience: default config, single laundered string.
@@ -481,6 +499,28 @@ fn secrets_never_expose_original_even_with_flag() {
         json.get("original").is_none(),
         "secret leaked original: {json}"
     );
+
+    // Every output format, with and without --with-originals.
+    let raw = [
+        concat!("ghp_AbCdEf01234567", "89AbCdEf0123456789AbCd"),
+        concat!("Zq8vN2kL", "p4RxQm7T"),
+        "MIIEpAIBAAKCAQEA",
+    ];
+    let input = format!(
+        "token {}\npassword={}\n-----BEGIN RSA PRIVATE KEY-----\n{}\n-----END RSA PRIVATE KEY-----",
+        raw[0], raw[1], raw[2]
+    );
+    for format in [Format::Text, Format::Preview, Format::Json, Format::Ndjson] {
+        for with_originals in [false, true] {
+            let out = emit(format, with_originals, &input);
+            for secret in raw {
+                assert!(
+                    !out.contains(secret),
+                    "{format:?} (with_originals={with_originals}) leaked {secret}:\n{out}"
+                );
+            }
+        }
+    }
 }
 
 #[test]
@@ -579,13 +619,6 @@ fn non_private_key_armor_is_not_redacted() {
         let input = format!("-----BEGIN {label}-----\nYWJjZGVm\n-----END {label}-----");
         assert_eq!(clean(&input), input, "label: {label}");
     }
-}
-
-#[test]
-fn dry_run_passes_through_unchanged() {
-    // The engine still produces findings; the caller chooses to echo input.
-    let (_, findings) = launder(Config::default(), "ops@dpep.io");
-    assert_eq!(findings.len(), 1);
 }
 
 #[test]
@@ -1307,4 +1340,69 @@ fn unterminated_private_key_ends_at_input_boundary() {
     assert_eq!(engine.end_input(), None);
     let next = engine.process_line("mail ops@dpep.io");
     assert_eq!(next.output.as_deref(), Some("mail <EMAIL_1>"));
+}
+
+#[test]
+fn dry_run_previews_each_replacement() {
+    let input = concat!(
+        "/Users/dpep/a.rs mail ops@dpep.io\n",
+        "token ghp_AbCdEf01234567",
+        "89AbCdEf0123456789AbCd\n",
+        "nothing here"
+    );
+    assert_eq!(
+        emit(Format::Preview, false, input),
+        concat!(
+            "1:1      path    /Users/dpep → ~\n",
+            "1:23     email   ops@dpep.io → <EMAIL_1>\n",
+            "2:7      secret  [github] → <TOKEN_1>\n",
+        )
+    );
+}
+
+#[test]
+fn ndjson_writes_a_row_per_line_then_a_summary() {
+    assert_eq!(
+        emit(Format::Ndjson, false, "ok\nmail ops@dpep.io"),
+        concat!(
+            r#"{"line":1,"text":"ok","findings":[]}"#,
+            "\n",
+            r#"{"line":2,"text":"mail <EMAIL_1>","findings":[{"type":"email","col":6,"len":11,"replacement":"<EMAIL_1>"}]}"#,
+            "\n",
+            r#"{"summary":{"total":1,"by_type":{"email":1}}}"#,
+            "\n",
+        )
+    );
+}
+
+#[test]
+fn json_document_holds_the_ndjson_rows() {
+    let input = "ok\nmail ops@dpep.io\n/Users/dpep/x";
+    let doc: serde_json::Value = serde_json::from_str(&emit(Format::Json, true, input)).unwrap();
+    let ndjson = emit(Format::Ndjson, true, input);
+    let mut rows: Vec<serde_json::Value> = ndjson
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let tail = rows.pop().unwrap();
+    assert_eq!(doc["lines"], serde_json::Value::Array(rows));
+    assert_eq!(doc["summary"], tail["summary"]);
+    assert_eq!(doc["lines"][1]["findings"][0]["original"], "ops@dpep.io");
+}
+
+#[test]
+fn ndjson_text_reconstructs_the_laundered_output() {
+    let input = concat!(
+        "a ops@dpep.io\n",
+        "-----BEGIN RSA PRIVATE KEY-----\nMIIE\n-----END RSA PRIVATE KEY----- after\n",
+        "b /Users/dpep/x"
+    );
+    let text: Vec<String> = emit(Format::Ndjson, false, input)
+        .lines()
+        .filter_map(|l| {
+            let v: serde_json::Value = serde_json::from_str(l).unwrap();
+            v["text"].as_str().map(str::to_string)
+        })
+        .collect();
+    assert_eq!(text.join("\n") + "\n", emit(Format::Text, false, input));
 }

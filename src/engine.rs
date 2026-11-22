@@ -27,6 +27,8 @@ pub struct Finding {
 
 /// The outcome of laundering one input line.
 pub struct LineResult {
+    /// 1-based input line number, counted across all inputs.
+    pub line: usize,
     /// The laundered line, or `None` when the line is fully suppressed
     /// (private-key body).
     pub output: Option<String>,
@@ -142,6 +144,7 @@ impl Engine {
         set_columns(line, &mut findings);
         let output = render(line, &findings);
         LineResult {
+            line: self.line_no,
             output: Some(output),
             findings,
         }
@@ -237,6 +240,7 @@ impl Engine {
                 Some(after.to_string())
             };
             return LineResult {
+                line: self.line_no,
                 output,
                 findings: vec![],
             };
@@ -246,6 +250,7 @@ impl Engine {
             *n += 1;
         }
         LineResult {
+            line: self.line_no,
             output: None,
             findings: vec![],
         }
