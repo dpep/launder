@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::{Action, Candidate, Kind};
+use super::{Action, Candidate};
 
 /// `/Users/<u>/…` (macOS) and `/home/<u>/…` (Linux). Group 1 = username,
 /// group 2 = the tail (leading separator onward, possibly empty).
@@ -48,7 +48,6 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         out.push(Candidate {
             start: m.start(),
             end: m.end(),
-            kind: Kind::Home,
             subtype: Some(subtype),
             action: Action::Home {
                 user: user.to_string(),
@@ -69,7 +68,6 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         out.push(Candidate {
             start: m.start(),
             end: m.end(),
-            kind: Kind::Home,
             subtype: Some("root_home"),
             action: Action::Home {
                 user: "root".to_string(),
@@ -87,7 +85,6 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         out.push(Candidate {
             start: m.start(),
             end: m.end(),
-            kind: Kind::Home,
             subtype: Some("windows_home"),
             action: Action::Home {
                 user: user.to_string(),
@@ -104,7 +101,6 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         out.push(Candidate {
             start: m.start(),
             end: m.end(),
-            kind: Kind::Tmpdir,
             subtype: Some("macos_tmpdir"),
             action: Action::Tmpdir { tail },
             rank: 0,
@@ -138,7 +134,6 @@ pub fn detect_home_dir(line: &str, home: &str, owner: &str, out: &mut Vec<Candid
         out.push(Candidate {
             start,
             end,
-            kind: Kind::Home,
             subtype: Some("home_env"),
             action: Action::Home {
                 user: owner.to_string(),

@@ -8,7 +8,7 @@ use anyhow::Result;
 use clap::Parser;
 use serde_json::json;
 
-use crate::config::Config;
+use crate::config::{self, Config};
 use crate::emit;
 use crate::engine::{Engine, Finding};
 use crate::input::LineReader;
@@ -31,8 +31,12 @@ struct Cli {
     #[arg(long = "all-ips")]
     all_ips: bool,
 
-    /// Only these types (comma list): path,secret,email,ip,host,mac,user.
-    #[arg(long = "only", value_name = "TYPES", conflicts_with = "except")]
+    #[arg(
+        long = "only",
+        value_name = "TYPES",
+        conflicts_with = "except",
+        help = format!("Only these types (comma list): {}",config::kind_names())
+    )]
     only: Option<String>,
 
     /// Every type except these (comma list).

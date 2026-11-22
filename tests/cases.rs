@@ -485,10 +485,7 @@ fn secrets_never_expose_original_even_with_flag() {
 #[test]
 fn non_secret_original_included_only_with_flag() {
     let (_, findings) = launder(Config::default(), "ops@dpep.io");
-    let email = findings
-        .iter()
-        .find(|f| f.kind.type_str() == "email")
-        .unwrap();
+    let email = findings.iter().find(|f| f.type_str() == "email").unwrap();
     assert!(
         launder::emit::finding_to_json(email, false)
             .get("original")

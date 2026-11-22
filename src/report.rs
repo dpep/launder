@@ -3,7 +3,6 @@
 
 use std::collections::BTreeMap;
 
-use crate::detect::Kind;
 use crate::engine::Finding;
 
 #[derive(Debug, Default)]
@@ -19,10 +18,7 @@ impl Report {
 
     pub fn record(&mut self, findings: &[Finding]) {
         for f in findings {
-            if f.kind == Kind::Keep {
-                continue;
-            }
-            *self.counts.entry(f.kind.type_str()).or_insert(0) += 1;
+            *self.counts.entry(f.type_str()).or_insert(0) += 1;
             self.total += 1;
         }
     }

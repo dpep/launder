@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::{Action, Candidate, Kind, PType};
+use super::{Action, Candidate, Label};
 
 static EMAIL: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b").unwrap());
@@ -39,10 +39,9 @@ pub fn email(line: &str, out: &mut Vec<Candidate>) {
         out.push(Candidate {
             start: m.start(),
             end: m.end(),
-            kind: Kind::Email,
             subtype: None,
             action: Action::Number {
-                ptype: PType::Email,
+                label: Label::Email,
                 value: m.as_str().to_ascii_lowercase(),
             },
             rank: 0,
@@ -77,10 +76,9 @@ pub fn mac(line: &str, out: &mut Vec<Candidate>) {
         out.push(Candidate {
             start: m.start(),
             end: m.end(),
-            kind: Kind::Mac,
             subtype: None,
             action: Action::Number {
-                ptype: PType::Mac,
+                label: Label::Mac,
                 value: m.as_str().to_ascii_lowercase(),
             },
             rank: 0,
@@ -113,10 +111,9 @@ fn ip_candidate(start: usize, end: usize, text: &str) -> Candidate {
     Candidate {
         start,
         end,
-        kind: Kind::Ip,
         subtype: None,
         action: Action::Number {
-            ptype: PType::Ip,
+            label: Label::Ip,
             value: text.to_ascii_lowercase(),
         },
         rank: 0,
@@ -127,10 +124,9 @@ fn host_candidate(start: usize, end: usize, text: &str, subtype: &'static str) -
     Candidate {
         start,
         end,
-        kind: Kind::Host,
         subtype: Some(subtype),
         action: Action::Number {
-            ptype: PType::Host,
+            label: Label::Host,
             value: text.to_ascii_lowercase(),
         },
         rank: 0,

@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 
 use super::ids;
-use super::{Action, Candidate, Kind, PType};
+use super::{Action, Candidate, Label};
 
 /// Known-prefix / structurally-shaped credentials. All map to `<TOKEN_N>`.
 struct Prefix {
@@ -117,10 +117,9 @@ fn cookies(line: &str, out: &mut Vec<Candidate>) {
             out.push(Candidate {
                 start,
                 end: start + val.len(),
-                kind: Kind::Secret,
                 subtype: Some("cookie"),
                 action: Action::Number {
-                    ptype: PType::Token,
+                    label: Label::Token,
                     value: val.as_str().to_string(),
                 },
                 rank: 30,
@@ -139,10 +138,9 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
             out.push(Candidate {
                 start: m.start(),
                 end: m.end(),
-                kind: Kind::Secret,
                 subtype: Some(prefix.subtype),
                 action: Action::Number {
-                    ptype: PType::Token,
+                    label: Label::Token,
                     value: m.as_str().to_string(),
                 },
                 rank: 50,
@@ -154,10 +152,9 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         out.push(Candidate {
             start: m.start(),
             end: m.end(),
-            kind: Kind::Secret,
             subtype: Some("jwt"),
             action: Action::Number {
-                ptype: PType::Jwt,
+                label: Label::Jwt,
                 value: m.as_str().to_string(),
             },
             rank: 60,
@@ -169,10 +166,9 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         out.push(Candidate {
             start: tok.start(),
             end: tok.end(),
-            kind: Kind::Secret,
             subtype: Some("authorization"),
             action: Action::Number {
-                ptype: PType::Token,
+                label: Label::Token,
                 value: tok.as_str().to_string(),
             },
             rank: 30,
@@ -184,9 +180,8 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         out.push(Candidate {
             start: pass.start(),
             end: pass.end(),
-            kind: Kind::Secret,
             subtype: Some("url_credential"),
-            action: Action::Fixed("<PASSWORD>"),
+            action: Action::FixedSecret("<PASSWORD>"),
             rank: 40,
         });
     }
@@ -208,10 +203,9 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         out.push(Candidate {
             start: val.start(),
             end: val.start() + text.len(),
-            kind: Kind::Secret,
             subtype: Some("keyed_entropy"),
             action: Action::Number {
-                ptype: PType::Secret,
+                label: Label::Secret,
                 value: text.to_string(),
             },
             rank: 20,

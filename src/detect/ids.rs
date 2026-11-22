@@ -7,7 +7,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::{Action, Candidate, Kind};
+use super::{Action, Candidate};
 
 static UUID: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b")
@@ -39,7 +39,6 @@ fn keep(start: usize, end: usize, subtype: &'static str) -> Candidate {
     Candidate {
         start,
         end,
-        kind: Kind::Keep,
         subtype: Some(subtype),
         action: Action::Keep,
         rank: 0,

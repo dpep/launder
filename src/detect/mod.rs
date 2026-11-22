@@ -47,11 +47,10 @@ pub struct Candidate {
     /// Byte range within the line.
     pub start: usize,
     pub end: usize,
-    pub kind: Kind,
     /// Finer-grained label for findings (e.g. `github`, `jwt`, `macos_home`).
     pub subtype: Option<&'static str>,
     pub action: Action,
-    /// Tiebreak within the same `kind`: higher wins (e.g. jwt over auth-bearer).
+    /// Tiebreak within the same kind: higher wins (e.g. jwt over auth-bearer).
     pub rank: u8,
 }
 
@@ -59,16 +58,39 @@ impl Candidate {
     pub fn width(&self) -> usize {
         self.end - self.start
     }
+
+    /// What this span scrubs; `None` for a diagnostic ID kept verbatim.
+    pub fn kind(&self) -> Option<Kind> {
+        match &self.action {
+            Action::Number { label, .. } => Some(label.kind()),
+            Action::Home { .. } | Action::Tmpdir { .. } => Some(Kind::Path),
+            Action::BareUser { .. } => Some(Kind::User),
+            Action::FixedSecret(_) => Some(Kind::Secret),
+            Action::Keep => None,
+        }
+    }
+
+    /// Overlap precedence: higher wins.
+    fn precedence(&self) -> u8 {
+        match self.kind() {
+            Some(Kind::Secret) => 100,
+            // A kept ID blocks every detector except a genuine secret.
+            None => 90,
+            Some(Kind::Path) => 70,
+            Some(Kind::Email) => 60,
+            Some(Kind::Ip) => 50,
+            Some(Kind::Host) => 40,
+            Some(Kind::Mac) => 30,
+            Some(Kind::User) => 10,
+        }
+    }
 }
 
-/// The broad category of a span. Drives precedence and the finding `type`.
+/// A scrub type: the finding `type`, and what `--only` / `--except` name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Kind {
+    Path,
     Secret,
-    /// A diagnostic ID (UUID / git SHA) to preserve verbatim — never scrubbed.
-    Keep,
-    Home,
-    Tmpdir,
     Email,
     Ip,
     Host,
@@ -77,13 +99,20 @@ pub enum Kind {
 }
 
 impl Kind {
-    /// The finding `type` string (§7).
-    pub fn type_str(self) -> &'static str {
+    pub const ALL: [Kind; 7] = [
+        Kind::Path,
+        Kind::Secret,
+        Kind::Email,
+        Kind::Ip,
+        Kind::Host,
+        Kind::Mac,
+        Kind::User,
+    ];
+
+    pub fn as_str(self) -> &'static str {
         match self {
+            Kind::Path => "path",
             Kind::Secret => "secret",
-            Kind::Keep => "keep",
-            Kind::Home => "home",
-            Kind::Tmpdir => "tmpdir",
             Kind::Email => "email",
             Kind::Ip => "ip",
             Kind::Host => "host",
@@ -92,21 +121,7 @@ impl Kind {
         }
     }
 
-    /// Precedence for overlap resolution: higher wins (§6.3).
-    fn precedence(self) -> u8 {
-        match self {
-            Kind::Secret => 100,
-            Kind::Keep => 90,
-            Kind::Home | Kind::Tmpdir => 70,
-            Kind::Email => 60,
-            Kind::Ip => 50,
-            Kind::Host => 40,
-            Kind::Mac => 30,
-            Kind::User => 10,
-        }
-    }
-
-    /// Secrets never reveal their original value, in any mode (§7).
+    /// Secrets never reveal their original value, in any mode.
     pub fn is_secret(self) -> bool {
         matches!(self, Kind::Secret)
     }
@@ -116,7 +131,7 @@ impl Kind {
 #[derive(Debug, Clone)]
 pub enum Action {
     /// A numbered placeholder for a distinct value: `<EMAIL_1>`, `<TOKEN_2>`…
-    Number { ptype: PType, value: String },
+    Number { label: Label, value: String },
     /// Home-dir collapse: register `user` as an identity, render prefix + tail.
     /// `bare_eligible` controls whether the username is also scrubbed standalone.
     Home {
@@ -128,15 +143,15 @@ pub enum Action {
     Tmpdir { tail: String },
     /// A standalone username occurrence → `<USER_N>` (identity already known).
     BareUser { user: String },
-    /// A fixed placeholder with no numbering: `<PASSWORD>`, `<PRIVATE_KEY>`.
-    Fixed(&'static str),
+    /// An unnumbered secret placeholder: `<PASSWORD>`, `<PRIVATE_KEY>`.
+    FixedSecret(&'static str),
     /// Preserve the original text; the span only blocks weaker detectors.
     Keep,
 }
 
-/// Numbered placeholder buckets. Each counts from 1 independently (§6.4).
+/// Numbered placeholder names. Each counts from 1 independently.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PType {
+pub enum Label {
     Token,
     Jwt,
     Secret,
@@ -146,16 +161,26 @@ pub enum PType {
     Mac,
 }
 
-impl PType {
-    pub fn label(self) -> &'static str {
+impl Label {
+    pub fn as_str(self) -> &'static str {
         match self {
-            PType::Token => "TOKEN",
-            PType::Jwt => "JWT",
-            PType::Secret => "SECRET",
-            PType::Email => "EMAIL",
-            PType::Ip => "IP",
-            PType::Host => "HOST",
-            PType::Mac => "MAC",
+            Label::Token => "TOKEN",
+            Label::Jwt => "JWT",
+            Label::Secret => "SECRET",
+            Label::Email => "EMAIL",
+            Label::Ip => "IP",
+            Label::Host => "HOST",
+            Label::Mac => "MAC",
+        }
+    }
+
+    pub fn kind(self) -> Kind {
+        match self {
+            Label::Token | Label::Jwt | Label::Secret => Kind::Secret,
+            Label::Email => Kind::Email,
+            Label::Ip => Kind::Ip,
+            Label::Host => Kind::Host,
+            Label::Mac => Kind::Mac,
         }
     }
 }
@@ -168,9 +193,8 @@ impl PType {
 /// start offset, ready for left-to-right assignment.
 pub fn resolve(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
     candidates.sort_by(|a, b| {
-        b.kind
-            .precedence()
-            .cmp(&a.kind.precedence())
+        b.precedence()
+            .cmp(&a.precedence())
             .then(b.rank.cmp(&a.rank))
             .then(b.width().cmp(&a.width()))
             .then(a.start.cmp(&b.start))

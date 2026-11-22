@@ -11,12 +11,12 @@
 
 use std::collections::HashMap;
 
-use crate::detect::PType;
+use crate::detect::Label;
 
 #[derive(Debug, Default)]
 pub struct Registry {
-    counters: HashMap<PType, usize>,
-    values: HashMap<(PType, String), String>,
+    counters: HashMap<Label, usize>,
+    values: HashMap<(Label, String), String>,
     /// Username identities in first-seen order; index = position + 1.
     identities: Vec<String>,
     ident_index: HashMap<String, usize>,
@@ -31,14 +31,14 @@ impl Registry {
 
     /// The placeholder for a numbered value, assigning the next index on first
     /// sight and reusing it thereafter.
-    pub fn placeholder(&mut self, ptype: PType, value: &str) -> String {
-        let key = (ptype, value.to_string());
+    pub fn placeholder(&mut self, label: Label, value: &str) -> String {
+        let key = (label, value.to_string());
         if let Some(p) = self.values.get(&key) {
             return p.clone();
         }
-        let n = self.counters.entry(ptype).or_insert(0);
+        let n = self.counters.entry(label).or_insert(0);
         *n += 1;
-        let placeholder = format!("<{}_{}>", ptype.label(), n);
+        let placeholder = format!("<{}_{}>", label.as_str(), n);
         self.values.insert(key, placeholder.clone());
         placeholder
     }

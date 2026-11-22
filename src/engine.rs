@@ -5,7 +5,7 @@
 //! home path are registered before standalone-username (bare) detection runs,
 //! so `user=<name>` on the same line still maps.
 
-use crate::config::{Config, TypeGroup};
+use crate::config::Config;
 use crate::detect::{self, Action, Candidate, Kind, resolve};
 use crate::registry::Registry;
 
@@ -23,6 +23,18 @@ pub struct Finding {
     /// Byte span within the source line (internal; not serialized).
     byte_start: usize,
     byte_end: usize,
+}
+
+impl Finding {
+    /// The finding `type` in JSON and `--report`. Paths still report as
+    /// `home` / `tmpdir`, split by subtype.
+    pub fn type_str(&self) -> &'static str {
+        match (self.kind, self.subtype) {
+            (Kind::Path, Some("macos_tmpdir")) => "tmpdir",
+            (Kind::Path, _) => "home",
+            (kind, _) => kind.as_str(),
+        }
+    }
 }
 
 /// The outcome of laundering one input line.
@@ -74,7 +86,7 @@ impl Engine {
 
     pub fn process_line(&mut self, line: &str) -> LineResult {
         self.line_no += 1;
-        let secrets_on = self.cfg.enabled(TypeGroup::Secret);
+        let secrets_on = self.cfg.enabled(Kind::Secret);
 
         // PEM private-key blocks span lines; collapse the whole block to one
         // <PRIVATE_KEY> placeholder.
@@ -92,13 +104,12 @@ impl Engine {
             candidates.push(Candidate {
                 start,
                 end,
-                kind: Kind::Secret,
                 subtype: Some("private_key"),
-                action: Action::Fixed("<PRIVATE_KEY>"),
+                action: Action::FixedSecret("<PRIVATE_KEY>"),
                 rank: u8::MAX,
             });
         }
-        if self.cfg.enabled(TypeGroup::Path) {
+        if self.cfg.enabled(Kind::Path) {
             detect::paths::detect(text, &mut candidates);
             if let Some((prefix, owner)) = &self.home {
                 detect::paths::detect_home_dir(text, prefix, owner, &mut candidates);
@@ -109,16 +120,16 @@ impl Engine {
         }
         // Diagnostic-ID preservation always runs (it only ever keeps text).
         detect::ids::detect(text, &mut candidates);
-        if self.cfg.enabled(TypeGroup::Email) {
+        if self.cfg.enabled(Kind::Email) {
             detect::net::email(text, &mut candidates);
         }
-        if self.cfg.enabled(TypeGroup::Ip) {
+        if self.cfg.enabled(Kind::Ip) {
             detect::net::ip(text, self.cfg.keep_private_ips, &mut candidates);
         }
-        if self.cfg.enabled(TypeGroup::Host) {
+        if self.cfg.enabled(Kind::Host) {
             detect::net::host(text, &self.extra_hosts, &mut candidates);
         }
-        if self.cfg.enabled(TypeGroup::Mac) {
+        if self.cfg.enabled(Kind::Mac) {
             detect::net::mac(text, &mut candidates);
         }
 
@@ -129,15 +140,14 @@ impl Engine {
         // register identities here, before bare-username detection.
         let mut findings: Vec<Finding> = resolved
             .iter()
-            .filter(|c| c.kind != Kind::Keep)
-            .map(|c| self.assign(line, c))
+            .filter_map(|c| self.assign(line, c))
             .collect();
 
         // Phase B: standalone usernames, over regions nothing else claimed.
-        if self.cfg.enabled(TypeGroup::User) {
+        if self.cfg.enabled(Kind::User) {
             let bare = self.detect_bare_users(text, &covered);
             for c in resolve(bare) {
-                findings.push(self.assign(line, &c));
+                findings.extend(self.assign(line, &c));
             }
         }
 
@@ -150,10 +160,12 @@ impl Engine {
     }
 
     /// Turn a resolved candidate into a finding with its concrete replacement.
-    fn assign(&mut self, line: &str, c: &Candidate) -> Finding {
+    /// A kept ID yields no finding: its text passes through as is.
+    fn assign(&mut self, line: &str, c: &Candidate) -> Option<Finding> {
+        let kind = c.kind()?;
         let original = line[c.start..c.end].to_string();
         let replacement = match &c.action {
-            Action::Number { ptype, value } => self.reg.placeholder(*ptype, value),
+            Action::Number { label, value } => self.reg.placeholder(*label, value),
             Action::Home {
                 user,
                 bare_eligible,
@@ -161,11 +173,11 @@ impl Engine {
             } => format!("{}{}", self.reg.home_prefix(user, *bare_eligible), tail),
             Action::Tmpdir { tail } => format!("<TMPDIR>{tail}"),
             Action::BareUser { user } => self.reg.user_placeholder(user),
-            Action::Fixed(text) => text.to_string(),
-            Action::Keep => original.clone(),
+            Action::FixedSecret(text) => text.to_string(),
+            Action::Keep => return None,
         };
-        Finding {
-            kind: c.kind,
+        Some(Finding {
+            kind,
             subtype: c.subtype,
             line: self.line_no,
             col: line[..c.start].chars().count() + 1,
@@ -174,7 +186,7 @@ impl Engine {
             original,
             byte_start: c.start,
             byte_end: c.end,
-        }
+        })
     }
 
     /// Find standalone occurrences of registered usernames outside `covered`.
@@ -189,7 +201,6 @@ impl Engine {
                 out.push(Candidate {
                     start,
                     end,
-                    kind: Kind::User,
                     subtype: None,
                     action: Action::BareUser { user: user.clone() },
                     rank: 0,
