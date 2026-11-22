@@ -86,11 +86,10 @@ impl Engine {
 
     pub fn process_line(&mut self, line: &str) -> LineResult {
         self.line_no += 1;
-        let secrets_on = self.cfg.enabled(Kind::Secret);
 
         // PEM private-key blocks span lines; collapse the whole block to one
         // <PRIVATE_KEY> placeholder.
-        if secrets_on && self.open_key.is_some() {
+        if self.open_key.is_some() {
             return self.continue_private_key(line);
         }
         self.scan(line, 0)
@@ -99,7 +98,6 @@ impl Engine {
     /// Detect and replace over `line[skip..]`; findings and columns index the
     /// whole line, and the output is the laundered text from `skip` on.
     fn scan(&mut self, line: &str, skip: usize) -> LineResult {
-        let secrets_on = self.cfg.enabled(Kind::Secret);
         // Phase A: every enabled detector except bare-username.
         // Detectors read the escape-blanked view; replacements index `line`.
         let mut view = detect::detection_view(line);
@@ -110,7 +108,7 @@ impl Engine {
         // Literal terms match case-insensitively; folding keeps offsets.
         let lower = detect::literal::fold(text);
         let mut candidates = Vec::new();
-        if secrets_on && let Some((start, end, continues)) = detect::secrets::private_key(text) {
+        if let Some((start, end, continues)) = detect::secrets::private_key(text) {
             self.open_key = continues.then_some((self.line_no, 0));
             candidates.push(Candidate {
                 start,
@@ -132,10 +130,9 @@ impl Engine {
         } else {
             self.learn_identities(paths);
         }
-        // The secrets detector also finds logins (URL, curl, .netrc): users.
-        if secrets_on || self.cfg.enabled(Kind::User) {
-            detect::secrets::detect(text, &mut candidates);
-        }
+        // Secret detection always runs; it also finds logins (URL, curl,
+        // .netrc), which are users.
+        detect::secrets::detect(text, &mut candidates);
         // Diagnostic-ID preservation always runs (it only ever keeps text).
         detect::ids::detect(text, &mut candidates);
         if self.cfg.enabled(Kind::Email) {

@@ -84,7 +84,7 @@ struct Cli {
         value_name = "TYPES",
         conflicts_with = "except",
         help_heading = "Scrubbing",
-        help = format!("Scrub only these types: {}", config::kind_names())
+        help = format!("Scrub only these types: {} (secrets always)", config::kind_names())
     )]
     only: Option<String>,
 

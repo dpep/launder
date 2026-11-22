@@ -1571,10 +1571,27 @@ fn only_and_except_apply_to_every_detectors_output() {
         launder(types(None, Some("user")), url).0,
         "https://alice:<PASSWORD_1>@db.example.com/x"
     );
+    // Secrets are scrubbed whatever the filter says.
     assert_eq!(
         launder(types(Some("user"), None), url).0,
-        concat!("https://<USER_1>:Zq8vN2kL", "p4Rx@db.example.com/x")
+        "https://<USER_1>:<PASSWORD_1>@db.example.com/x"
     );
+}
+
+#[test]
+fn secrets_are_scrubbed_whatever_only_and_except_say() {
+    let cfg = Config {
+        enabled: Config::resolve_types(Some("email"), None).unwrap(),
+        ..Config::default()
+    };
+    let token = concat!("ghp_AbCdEf0123456789", "AbCdEf0123456789AbCd");
+    assert_eq!(
+        launder(cfg, &format!("GITHUB_TOKEN={token} ops@dpep.io")).0,
+        "GITHUB_TOKEN=<TOKEN_1> <EMAIL_1>"
+    );
+    let err = Config::resolve_types(None, Some("secret")).unwrap_err();
+    assert!(err.to_string().contains("unknown type: secret"), "{err}");
+    assert!(!launder::config::kind_names().contains("secret"));
 }
 
 // --- detection-model lane ---

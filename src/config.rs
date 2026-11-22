@@ -38,8 +38,9 @@ impl Config {
         Ok(all)
     }
 
+    /// Secrets are always on: no filter may let a credential through.
     pub fn enabled(&self, kind: Kind) -> bool {
-        self.enabled.contains(&kind)
+        kind.is_secret() || self.enabled.contains(&kind)
     }
 }
 
@@ -56,13 +57,16 @@ impl Default for Config {
     }
 }
 
-/// The types `--only` / `--except` name. Not `term`: only `--watch` makes
-/// one, and a named term is scrubbed whatever the filter says.
+/// The types `--only` / `--except` name. Not `secret`, which is always
+/// scrubbed, nor `term`: only `--watch` makes one, and a named term is
+/// scrubbed whatever the filter says.
 fn filterable() -> impl Iterator<Item = Kind> {
-    Kind::ALL.into_iter().filter(|&k| k != Kind::Term)
+    Kind::ALL
+        .into_iter()
+        .filter(|&k| k != Kind::Term && !k.is_secret())
 }
 
-/// The `--only` / `--except` vocabulary, comma-separated: `path,secret,…`.
+/// The `--only` / `--except` vocabulary, comma-separated: `path,email,…`.
 pub fn kind_names() -> String {
     filterable().map(Kind::as_str).collect::<Vec<_>>().join(",")
 }

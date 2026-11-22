@@ -121,7 +121,7 @@ $ echo 'key=ghp_AbCdEf0123456789AbCdEf0123456789AbCd mail ops@dpep.io' | launder
 
 `col` and `len` count characters (not bytes) in the input line; `col` starts at 1.
 
-One rule beats every flag: **a raw secret never appears in any output.** `-n` shows only its subtype, and `--with-originals` leaves `original` off. A dedicated test (`secrets_never_expose_original_even_with_flag` in [tests/cases.rs](tests/cases.rs)) guards it. The exception you choose yourself: `--only` and `--except` can turn the `secret` type off.
+One rule beats every flag: **a raw secret never appears in any output.** `-n` shows only its subtype, and `--with-originals` leaves `original` off. A dedicated test (`secrets_never_expose_original_even_with_flag` in [tests/cases.rs](tests/cases.rs)) guards it. No flag turns secret detection off: `--only` and `--except` don't name it, and `--keep` can't spare one.
 
 In a hook or CI, `--check` exits 1 if anything was scrubbed:
 
@@ -169,7 +169,7 @@ Files are read in order; `-` or no files reads stdin. Bare `launder` at a termin
 | `--completions [<SHELL>]` | Print a completion script for bash, zsh, fish, ... (default: $SHELL) |
 | `--watch <TERM>` | Also scrub TERM, any case; a domain takes its subdomains (also $LAUNDER_WATCH) |
 | `--keep <TERM>` | Never scrub TERM, e.g. a public host. Secrets are scrubbed regardless |
-| `--only <TYPES>` | Scrub only these types: path,secret,email,ip,host,mac,user |
+| `--only <TYPES>` | Scrub only these types: path,email,ip,host,mac,user (secrets always) |
 | `--except <TYPES>` | Scrub every type except these (same names as --only) |
 | `--all-ips` | Also scrub private and loopback IPs (kept by default) |
 
