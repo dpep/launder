@@ -16,7 +16,7 @@ $ launder crash.log
   203.0.113.7                          →   <IP_1>
 ```
 
-Positionals are files; with none, `launder` reads stdin. It's streaming and line-oriented, so it works on `tail -f`. The default action is "read a stream, print it laundered" — every other behavior is a flag.
+Positionals are files (`-` is stdin); with none, `launder` reads stdin. It's streaming and line-oriented, so it works on `tail -f`. The default action is "read a stream, print it laundered" — every other behavior is a flag.
 
 ## What it keeps, what it scrubs
 
@@ -46,7 +46,7 @@ cargo install --path .             # or: make install
 ## Usage
 
 ```sh
-launder [FILE...]            # files, or stdin if none
+launder [FILE...]            # files (- is stdin), or stdin if none
 launder -o/--output FILE     # write laundered text to FILE (default: stdout)
 launder --all-ips            # scrub private/loopback IPs too (kept by default)
 launder --only TYPES         # comma list: path,secret,email,ip,host,mac,user
