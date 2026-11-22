@@ -1694,3 +1694,16 @@ fn one_password_gets_one_placeholder_wherever_it_appears() {
         ("api_key=48213377", "api_key=<SECRET_1>"),
     ]);
 }
+
+#[test]
+fn github_actions_add_mask_value_is_a_secret() {
+    check(&[
+        ("::add-mask::Zq8vN2kLp4Rx", "::add-mask::<SECRET_1>"),
+        (
+            r#"echo "::add-mask::hunter2""#,
+            r#"echo "::add-mask::<SECRET_1>""#,
+        ),
+        // The runner's own echo is already masked.
+        ("::add-mask::***", "::add-mask::***"),
+    ]);
+}

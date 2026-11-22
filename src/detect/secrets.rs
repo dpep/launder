@@ -418,6 +418,22 @@ fn scan(line: &str, out: &mut Vec<Candidate>) {
     for m in ENCODED_URL.find_iter(line) {
         encoded_url_credential(line, m.end(), out);
     }
+    // GitHub Actions' `::add-mask::VALUE` declares its value a secret.
+    for (at, _) in line.match_indices("::add-mask::") {
+        let (start, end) = unquoted_span(line, at + "::add-mask::".len());
+        if !is_placeholder_value(&line[start..end]) {
+            out.push(Candidate {
+                start,
+                end,
+                subtype: Some("add_mask"),
+                action: Action::Number {
+                    label: Label::Secret,
+                    value: line[start..end].to_string(),
+                },
+                rank: 20,
+            });
+        }
+    }
 
     if !KEYED_HINT.is_match(line) {
         return;
