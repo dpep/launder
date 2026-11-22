@@ -41,9 +41,6 @@ static DOTTED_NAME: LazyLock<Regex> = LazyLock::new(|| {
 
 const INTERNAL_LABELS: &[&str] = &["local", "internal", "corp"];
 
-/// Names that say "this was printed by a version banner", not an address.
-const VERSION_WORDS: &[&str] = &["version", "ver"];
-
 pub fn email(line: &str, out: &mut Vec<Candidate>) {
     for caps in EMAIL.captures_iter(line) {
         let m = caps.get(0).unwrap();
@@ -72,7 +69,10 @@ pub fn ip(line: &str, keep_private: bool, out: &mut Vec<Candidate>) {
         let Some(octets) = parse_ipv4(text) else {
             continue;
         };
-        if (keep_private && is_private_v4(octets)) || is_version(line, m.start()) {
+        if (keep_private && is_private_v4(octets))
+            || in_longer_dotted_run(line, m.start(), m.end())
+            || is_version(line, m.start())
+        {
             continue;
         }
         out.push(ip_candidate(m.start(), m.end(), text));
@@ -159,6 +159,14 @@ fn is_internal(name: &str) -> bool {
     })
 }
 
+/// Four of five or more dot-joined numbers (an OID, `1.2.3.4.5`). A lone
+/// trailing `.` ends a sentence, not the run.
+fn in_longer_dotted_run(line: &str, start: usize, end: usize) -> bool {
+    let b = line.as_bytes();
+    (start >= 2 && b[start - 1] == b'.' && b[start - 2].is_ascii_digit())
+        || (end + 1 < b.len() && b[end] == b'.' && b[end + 1].is_ascii_digit())
+}
+
 /// A dotted quad that is a version: a product token (`Chrome/119.0.0.0`) or
 /// after a version word (`version 1.2.3.4`, `Version: 1.2.3.4`).
 fn is_version(line: &str, start: usize) -> bool {
@@ -174,7 +182,8 @@ fn is_version(line: &str, start: usize) -> bool {
         .rsplit(|c: char| !c.is_ascii_alphabetic())
         .next()
         .unwrap_or("");
-    VERSION_WORDS.iter().any(|w| word.eq_ignore_ascii_case(w))
+    // `version` may end a compound name (`RestoreVersion`, `app_version`).
+    word.eq_ignore_ascii_case("ver") || word.to_ascii_lowercase().ends_with("version")
 }
 
 fn parse_ipv4(s: &str) -> Option<[u8; 4]> {

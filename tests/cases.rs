@@ -1610,3 +1610,19 @@ fn narrow_secret_inside_a_wider_one_redacts_the_whole() {
         ),
     ]);
 }
+
+#[test]
+fn longer_dotted_number_run_is_not_an_ip() {
+    check(&[
+        ("oid 1.3.6.1.4.1.2021 walk", "oid 1.3.6.1.4.1.2021 walk"),
+        (
+            r#"RestoreVersion = "1.2.3.4.5""#,
+            r#"RestoreVersion = "1.2.3.4.5""#,
+        ),
+        ("pkg 11.1.2.3.4 ok", "pkg 11.1.2.3.4 ok"),
+        ("RestoreVersion = 8.8.8.8", "RestoreVersion = 8.8.8.8"),
+        // A sentence-ending period and an address range are still addresses.
+        ("connect to 8.8.8.8. then", "connect to <IP_1>. then"),
+        ("range 203.0.113.9-203.0.113.20", "range <IP_1>-<IP_2>"),
+    ]);
+}
