@@ -104,7 +104,7 @@ pub fn mac(line: &str, out: &mut Vec<Candidate>) {
 }
 
 /// Internal hostnames, plus the machine's own names (`machine`) matched in
-/// `lower`, the ASCII-lowercased line.
+/// `lower`, the line case-folded by [`fold`](super::literal::fold).
 pub fn host(line: &str, lower: &str, machine: &[Term], out: &mut Vec<Candidate>) {
     for m in DOTTED_NAME.find_iter(line) {
         // `.env.local` is a dotfile, not a host.
