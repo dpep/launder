@@ -2022,3 +2022,24 @@ fn an_app_specific_password_is_a_secret() {
         ("secret=abcd-efgh-ijkl", "secret=abcd-efgh-ijkl"),
     ]);
 }
+
+#[test]
+fn dashed_digit_groups_are_a_key_not_a_date() {
+    check(&[
+        ("secret: 1234-5678-9012-3456", "secret: <SECRET_1>"),
+        // Dates, times and versions stay readable.
+        ("token=2026-11-21", "token=2026-11-21"),
+        ("token=21.11.2026", "token=21.11.2026"),
+        (
+            "session=2026-11-21T10:00:00.123+00:00",
+            "session=2026-11-21T10:00:00.123+00:00",
+        ),
+        ("token=10:00:00.123Z", "token=10:00:00.123Z"),
+        ("token=10.15.7.1", "token=10.15.7.1"),
+        // The nil UUID stands in for no session.
+        (
+            "SessionID: 00000000-0000-0000-0000-000000000000",
+            "SessionID: 00000000-0000-0000-0000-000000000000",
+        ),
+    ]);
+}

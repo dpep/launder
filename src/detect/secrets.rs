@@ -299,16 +299,20 @@ static IDENTIFIER: LazyLock<Regex> = LazyLock::new(|| {
     let word = r"(?:(?:[A-Z]?[a-z]+)+[0-9]{0,3}|[A-Z]+[0-9]{0,3}|[0-9]+)";
     let segment = format!(r"\.?{word}(?:[_.\-]{word})*");
     let path = format!(r"(?:\.\.?)?/(?:{segment}(?:/{segment})*/?)?");
+    // A date has a four-digit year first or last; `1234-5678-9012-3456` is a key.
+    let date = r"(?:[0-9]{4}[-.][0-9]{1,2}[-.][0-9]{1,2}|[0-9]{1,2}[-.][0-9]{1,2}[-.][0-9]{4})";
+    let time = r"[0-9]{1,2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?";
+    let when = format!(r"(?:{date}(?:T{time})?|{time})(?:Z|[-+][0-9]{{2}}:?[0-9]{{2}})?");
     let names = concat!(
         r"\.?[a-z]+(?:[_.\-](?:[a-z]+[0-9]{0,3}|[0-9]{1,3}))*",
         r"|[A-Z]+(?:_(?:[A-Z]+[0-9]{0,3}|[0-9]{1,3}))*",
         r"|[a-z]*(?:[A-Z][a-z]{2,})+",
-        r"|[0-9\-:TZ.]*[\-:TZ.][0-9\-:TZ.]*",
+        r"|[0-9]+(?:\.[0-9]+)+",
         r"|[a-z0-9]+(?:/[a-z0-9_.\-]+)+",
         r"|\$(?:[A-Z_][A-Z0-9_]*|[a-z_][a-z0-9_]*)|\$\{[A-Za-z_][^}]*\}",
         r"|%[A-Za-z_]+%|\{\{.*\}\}",
     );
-    Regex::new(&format!("^(?:{names}|{path})$")).unwrap()
+    Regex::new(&format!("^(?:{names}|{when}|{path})$")).unwrap()
 });
 
 fn is_identifier_shaped(s: &str) -> bool {
@@ -656,13 +660,14 @@ fn shape_gated(prefix: &str, word: &str) -> Option<bool> {
 }
 
 /// A value that stands in for a secret rather than being one: empty, a
-/// boolean or null, a mask of `*`, or a redaction marker.
+/// boolean or null, the nil UUID, a mask of `*`, or a redaction marker.
 fn is_placeholder_value(s: &str) -> bool {
     s.is_empty()
         || ["true", "false", "null", "nil", "none"]
             .iter()
             .any(|w| s.eq_ignore_ascii_case(w))
         || s.bytes().all(|b| b == b'*')
+        || s == "00000000-0000-0000-0000-000000000000"
         || is_redaction_marker(s)
 }
 
