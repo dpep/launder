@@ -34,63 +34,74 @@ Exit codes:
 #[command(name = "launder", version, about, after_help = AFTER_HELP)]
 #[command(group(ArgGroup::new("structured").args(["json", "ndjson"])))]
 struct Cli {
-    /// Input files (stdin if none).
+    /// Input files, read in order (stdin if none).
     files: Vec<String>,
 
-    /// Write laundered output to FILE (default: stdout).
-    #[arg(short = 'o', long = "output", value_name = "FILE")]
-    output: Option<String>,
-
-    /// Scrub private / loopback IPs too (kept by default).
-    #[arg(long = "all-ips")]
-    all_ips: bool,
-
-    #[arg(
-        long = "only",
-        value_name = "TYPES",
-        conflicts_with = "except",
-        help = format!("Only these types (comma list): {}",config::kind_names())
-    )]
-    only: Option<String>,
-
-    /// Every type except these (comma list).
-    #[arg(long = "except", value_name = "TYPES")]
-    except: Option<String>,
-
-    /// Print a summary of what changed (counts by type) to stderr.
-    #[arg(short = 'r', long = "report")]
-    report: bool,
-
-    /// Preview each replacement instead of printing the text (shows originals).
+    /// Show each replacement instead of the text (not for pasting: shows originals).
     #[arg(short = 'n', long = "dry-run", conflicts_with_all = ["json", "ndjson"])]
     dry_run: bool,
 
-    /// Pretty JSON: {lines: [{line, text, findings}], summary}, written at EOF.
+    /// JSON: {lines: [{line, text, findings}], summary}, written at EOF.
     #[arg(short = 'j', long = "json", conflicts_with = "ndjson")]
     json: bool,
 
-    /// Streaming JSON: one {line, text, findings} row per line, then a summary.
+    /// Like -j, streamed: one row per line, then a summary line.
     #[arg(short = 'J', long = "ndjson")]
     ndjson: bool,
 
-    /// Add each finding's original text to JSON (never for secrets).
+    /// Add each finding's original text to -j/-J output (never a secret's).
     #[arg(long = "with-originals", requires = "structured")]
     with_originals: bool,
 
-    /// Also scrub TERM, any case; a domain takes its subdomains (also $LAUNDER_WATCH).
-    #[arg(long = "watch", value_name = "TERM", value_delimiter = ',')]
-    watch: Vec<String>,
+    /// Write output to FILE instead of stdout.
+    #[arg(short = 'o', long = "output", value_name = "FILE")]
+    output: Option<String>,
 
-    /// Never scrub TERM (a false positive). Secrets are always scrubbed.
-    #[arg(long = "keep", value_name = "TERM", value_delimiter = ',')]
-    keep: Vec<String>,
+    /// Also print a summary of what changed to stderr.
+    #[arg(short = 'r', long = "report")]
+    report: bool,
 
     /// Exit 1 if anything was scrubbed, 0 if clean (for hooks and CI).
     #[arg(long = "check")]
     check: bool,
 
-    /// Print a shell completion script (default: from $SHELL).
-    #[arg(long = "completions", value_name = "SHELL", num_args = 0..=1)]
+    /// Also scrub TERM, any case; a domain takes its subdomains (also $LAUNDER_WATCH).
+    #[arg(
+        long = "watch",
+        value_name = "TERM",
+        value_delimiter = ',',
+        help_heading = "Scrubbing"
+    )]
+    watch: Vec<String>,
+
+    /// Never scrub TERM, e.g. a public host. Secrets are scrubbed regardless.
+    #[arg(
+        long = "keep",
+        value_name = "TERM",
+        value_delimiter = ',',
+        help_heading = "Scrubbing"
+    )]
+    keep: Vec<String>,
+
+    #[arg(
+        long = "only",
+        value_name = "TYPES",
+        conflicts_with = "except",
+        help_heading = "Scrubbing",
+        help = format!("Scrub only these types: {}", config::kind_names())
+    )]
+    only: Option<String>,
+
+    /// Scrub every type except these (same names as --only).
+    #[arg(long = "except", value_name = "TYPES", help_heading = "Scrubbing")]
+    except: Option<String>,
+
+    /// Also scrub private and loopback IPs (kept by default).
+    #[arg(long = "all-ips", help_heading = "Scrubbing")]
+    all_ips: bool,
+
+    /// Print a completion script for bash, zsh, fish, ... (default: $SHELL).
+    #[arg(long = "completions", value_name = "SHELL", num_args = 0..=1, hide_possible_values = true)]
     completions: Option<Option<Shell>>,
 }
 
