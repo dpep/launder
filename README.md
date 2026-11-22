@@ -55,7 +55,7 @@ Numbers count per type in first-seen order, so a repeated value keeps its placeh
 
 A login (URL userinfo, `curl -u`, `.netrc`) is scrubbed where it logs in, not everywhere the word appears.
 
-A secret is scrubbed everywhere it appears after it's found, with the same placeholder: after `password: Spring2026!`, `login failed for Spring2026!` becomes `login failed for <PASSWORD_1>`. The match is exact (case and whole token) and needs 8 or more characters, so `password: test` doesn't take the word `test` with it.
+A secret is scrubbed everywhere it appears after it's found, with the same placeholder: after `password: Spring2026!`, `login failed for Spring2026!` becomes `login failed for <PASSWORD_1>`. The match is exact (case and whole token), and only for values of 8 or more characters that look generated rather than like a word: `password: disabled` is scrubbed at its key but doesn't take the word `disabled` with it.
 
 ## What it keeps
 
