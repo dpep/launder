@@ -45,6 +45,29 @@ static PREFIX_TOKENS: LazyLock<Vec<Prefix>> = LazyLock::new(|| {
             r"\bSG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}\b",
             "sendgrid",
         ),
+        p(r"\bhf_[A-Za-z0-9]{30,}\b", "huggingface"),
+        // A macaroon whose base64 always opens with `AgE`.
+        p(r"\bpypi-AgE[A-Za-z0-9_\-]{50,}", "pypi"),
+        p(r"\bdo[opr]_v1_[a-f0-9]{64}\b", "digitalocean"),
+        p(r"\bshp(?:at|ss|ca|pa)_[a-fA-F0-9]{32}\b", "shopify"),
+        p(r"\bkey-[0-9a-z]{32}\b", "mailgun"),
+        p(r"\bSK[0-9a-f]{32}\b", "twilio"),
+    ]
+});
+
+/// Webhook URLs whose path is the credential: everything after the fixed
+/// prefix (group 1), IDs included.
+static WEBHOOKS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
+    vec![
+        (
+            Regex::new(r"\bhooks\.slack\.com/(?:services|workflows|triggers)/([A-Za-z0-9_/\-]+)")
+                .unwrap(),
+            "slack_webhook",
+        ),
+        (
+            Regex::new(r"\bdiscord(?:app)?\.com/api/webhooks/([0-9]+/[A-Za-z0-9_\-]+)").unwrap(),
+            "discord_webhook",
+        ),
     ]
 });
 
@@ -186,6 +209,21 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
                 action: Action::Number {
                     label: Label::Token,
                     value: m.as_str().to_string(),
+                },
+                rank: 50,
+            });
+        }
+    }
+    for (re, subtype) in WEBHOOKS.iter() {
+        for caps in re.captures_iter(line) {
+            let path = caps.get(1).unwrap();
+            out.push(Candidate {
+                start: path.start(),
+                end: path.end(),
+                subtype: Some(subtype),
+                action: Action::Number {
+                    label: Label::Token,
+                    value: path.as_str().to_string(),
                 },
                 rank: 50,
             });

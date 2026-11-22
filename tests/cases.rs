@@ -1093,3 +1093,69 @@ fn url_encoded_separators_are_keyed_values() {
         ),
     ]);
 }
+
+#[test]
+fn more_known_prefix_tokens_are_redacted() {
+    check(&[
+        (
+            concat!("HF_TOKEN set: hf_AbCdEfGhIjKlMn", "OpQrStUvWxYz0123456789"),
+            "HF_TOKEN set: <TOKEN_1>",
+        ),
+        (
+            concat!(
+                "upload with pypi-AgEIcHlwaS5vcmcCJDAwMDAw",
+                "MDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMAACKlszLCJhYmMiXQ"
+            ),
+            "upload with <TOKEN_1>",
+        ),
+        (
+            concat!(
+                "doctl auth dop_v1_0123456789abcdef0123456789abcdef",
+                "0123456789abcdef0123456789abcdef"
+            ),
+            "doctl auth <TOKEN_1>",
+        ),
+        (
+            concat!(
+                "shpat_1a2b3c4d5e6f", "7a8b9c0d1e2f3a4b5c6d ",
+                "shpss_1a2b3c4d5e6f", "7a8b9c0d1e2f3a4b5c6e ",
+                "shpca_1a2b3c4d5e6f", "7a8b9c0d1e2f3a4b5c6f ",
+                "shppa_1a2b3c4d5e6f", "7a8b9c0d1e2f3a4b5c60"
+            ),
+            "<TOKEN_1> <TOKEN_2> <TOKEN_3> <TOKEN_4>",
+        ),
+        (
+            concat!("mailgun key-3ax6xnjp29jd6fds", "4gc373sgvjxteol0"),
+            "mailgun <TOKEN_1>",
+        ),
+        (
+            concat!("twilio SK0123456789abcdef", "0123456789abcdef"),
+            "twilio <TOKEN_1>",
+        ),
+        // Look-alikes stay.
+        (
+            "key-value-store-abcdefghij hf_hub_download",
+            "key-value-store-abcdefghij hf_hub_download",
+        ),
+    ]);
+}
+
+#[test]
+fn webhook_urls_redact_their_secret_path() {
+    check(&[
+        (
+            concat!(
+                "webhook_url=https://hooks.slack.com/services/T0000",
+                "0000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
+            ),
+            "webhook_url=https://hooks.slack.com/services/<TOKEN_1>",
+        ),
+        (
+            concat!(
+                "POST https://discord.com/api/webhooks/123456789012345678/AbCdEfGhIjKl",
+                "MnOpQrStUvWxYz0123456789 failed"
+            ),
+            "POST https://discord.com/api/webhooks/<TOKEN_1> failed",
+        ),
+    ]);
+}
