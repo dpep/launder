@@ -106,20 +106,75 @@ const ROLE_USERS: [&str; 11] = [
 
 /// A credential's login as an identity → `<USER_N>`. Short names share the
 /// bare-username floor: too generic (`sa`, `app`, `git`) to identify anyone.
-fn login(user: regex::Match, subtype: &'static str, out: &mut Vec<Candidate>) {
-    let name = user.as_str();
+fn login(
+    line: &str,
+    (start, end): (usize, usize),
+    subtype: &'static str,
+    out: &mut Vec<Candidate>,
+) {
+    let name = &line[start..end];
     if name.len() < 4 || ROLE_USERS.iter().any(|r| name.eq_ignore_ascii_case(r)) {
         return;
     }
     out.push(Candidate {
-        start: user.start(),
-        end: user.end(),
+        start,
+        end,
         subtype: Some(subtype),
         action: Action::BareUser {
             user: name.to_string(),
         },
         rank: 0,
     });
+}
+
+/// A password in a credential's userinfo → `<PASSWORD_N>`.
+fn userinfo_password(
+    line: &str,
+    (start, end): (usize, usize),
+    subtype: &'static str,
+    out: &mut Vec<Candidate>,
+) {
+    out.push(Candidate {
+        start,
+        end,
+        subtype: Some(subtype),
+        action: Action::Number {
+            label: Label::Password,
+            value: line[start..end].to_string(),
+        },
+        rank: 40,
+    });
+}
+
+/// The scheme of a percent-encoded URL (`https%3A%2F%2F`), as in a
+/// `redirect=` parameter. [`encoded_url_credential`] reads the authority.
+static ENCODED_URL: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)\b[a-z][a-z0-9+.\-]*%3a%2f%2f").unwrap());
+
+/// Credentials in a percent-encoded URL, by the same rule as a plain one:
+/// the authority ends at an encoded `/`, `?` or `#`, the password runs to its
+/// last `%40`, and the user ends at the first `%3A`.
+fn encoded_url_credential(line: &str, at: usize, out: &mut Vec<Candidate>) {
+    let rest = &line[at..];
+    let lower = rest.to_ascii_lowercase();
+    let run = rest
+        .find(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '&' | '/' | '?' | '#'))
+        .unwrap_or(rest.len());
+    let authority = ["%2f", "%3f", "%23"]
+        .iter()
+        .filter_map(|t| lower[..run].find(t))
+        .min()
+        .unwrap_or(run);
+    let Some(userinfo) = lower[..authority].rfind("%40") else {
+        return;
+    };
+    let Some(colon) = lower[..userinfo].find("%3a") else {
+        return;
+    };
+    if colon + 3 < userinfo {
+        login(line, (at, at + colon), "url_credential", out);
+        userinfo_password(line, (at + colon + 3, at + userinfo), "url_credential", out);
+    }
 }
 
 /// `curl -u user:pass` / `--user user:pass`. Only after `curl`: elsewhere
@@ -296,19 +351,17 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         (&*CURL_USER, "curl_user"),
     ] {
         for caps in re.captures_iter(line) {
-            login(caps.get(1).unwrap(), subtype, out);
-            let pass = caps.get(2).unwrap();
-            out.push(Candidate {
-                start: pass.start(),
-                end: pass.end(),
-                subtype: Some(subtype),
-                action: Action::Number {
-                    label: Label::Password,
-                    value: pass.as_str().to_string(),
-                },
-                rank: 40,
-            });
+            let span = |i| {
+                caps.get(i)
+                    .map(|m: regex::Match| (m.start(), m.end()))
+                    .unwrap()
+            };
+            login(line, span(1), subtype, out);
+            userinfo_password(line, span(2), subtype, out);
         }
+    }
+    for m in ENCODED_URL.find_iter(line) {
+        encoded_url_credential(line, m.end(), out);
     }
 
     if !KEYED_HINT.is_match(line) {
@@ -342,7 +395,7 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         for caps in NETRC_TOKEN.captures_iter(line) {
             let val = caps.get(2).unwrap();
             if &caps[1] == "login" {
-                login(val, "netrc_login", out);
+                login(line, (val.start(), val.end()), "netrc_login", out);
             } else {
                 let span = value_span(line, val.start());
                 keyed(line, "password", "", "password", span, out);

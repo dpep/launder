@@ -1263,3 +1263,29 @@ fn aws_secret_beside_its_access_key_id_is_redacted() {
         ),
     ]);
 }
+
+#[test]
+fn percent_encoded_url_credentials_are_redacted() {
+    check(&[
+        (
+            concat!(
+                "url=https%3A%2F%2Falice%3AZx9Yw8Vu7Ts6",
+                "Rq5Po4Nm3%40db.example.com"
+            ),
+            "url=https%3A%2F%2F<USER_1>%3A<PASSWORD_1>%40db.example.com",
+        ),
+        // The password runs to the last `%40` of the authority.
+        (
+            concat!(
+                "next=postgres%3a%2f%2fapp%3ap%40",
+                "ss%40db.example.com%2Fapp%40x"
+            ),
+            "next=postgres%3a%2f%2fapp%3a<PASSWORD_1>%40db.example.com%2Fapp%40x",
+        ),
+        // No credentials, nothing to redact.
+        (
+            "next=https%3A%2F%2Fdb.example.com%2Fa%3Ab",
+            "next=https%3A%2F%2Fdb.example.com%2Fa%3Ab",
+        ),
+    ]);
+}
