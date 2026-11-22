@@ -46,7 +46,7 @@ struct Cli {
     #[arg(short = 'j', long = "json", conflicts_with = "ndjson")]
     json: bool,
 
-    /// Like -j, streamed: one row per line, then a summary line.
+    /// Like -j, streamed: one row per input line, then a summary line.
     #[arg(short = 'J', long = "ndjson")]
     ndjson: bool,
 

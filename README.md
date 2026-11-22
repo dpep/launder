@@ -161,7 +161,7 @@ Files are read in order; `-` or no files reads stdin. Bare `launder` at a termin
 |---|---|
 | `-n, --dry-run` | Show each replacement instead of the text (not for pasting: shows originals) |
 | `-j, --json` | JSON: {lines: [{line, text, findings}], summary}, written at EOF |
-| `-J, --ndjson` | Like -j, streamed: one row per line, then a summary line |
+| `-J, --ndjson` | Like -j, streamed: one row per input line, then a summary line |
 | `--with-originals` | Add each finding's original text to -j/-J output (never a secret's) |
 | `-o, --output <FILE>` | Write output to FILE instead of stdout |
 | `-r, --report` | Also print a summary of what changed to stderr |
