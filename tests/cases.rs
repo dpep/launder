@@ -1665,3 +1665,16 @@ fn short_keyed_secret_is_redacted_unless_it_reads_as_a_name() {
         ),
     ]);
 }
+
+#[test]
+fn lowercase_redaction_marker_is_not_a_secret() {
+    check(&[
+        (
+            "[auth] HasSecureToken: <private> (F61F57F5-20FF-4032-B0F5-2AA647F3828D)",
+            "[auth] HasSecureToken: <private> (F61F57F5-20FF-4032-B0F5-2AA647F3828D)",
+        ),
+        ("token=[filtered]", "token=[filtered]"),
+        // Mixed letters and digits in brackets may be the secret itself.
+        ("token=[a8xk2pq9]", "token=<SECRET_1>"),
+    ]);
+}

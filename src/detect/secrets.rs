@@ -630,7 +630,8 @@ fn is_shell_cwd(key: &str, value: &str) -> bool {
         && (value.starts_with('/') || value.starts_with('~'))
 }
 
-/// A value already redacted upstream: Rails' `[FILTERED]`, launder's `<SECRET_1>`.
+/// A value already redacted upstream: Rails' `[FILTERED]`, Apple's `<private>`,
+/// launder's `<SECRET_1>`.
 fn is_redaction_marker(s: &str) -> bool {
     let inner = s
         .strip_prefix('[')
@@ -638,8 +639,10 @@ fn is_redaction_marker(s: &str) -> bool {
         .or_else(|| s.strip_prefix('<').and_then(|r| r.strip_suffix('>')));
     inner.is_some_and(|i| {
         !i.is_empty()
-            && i.bytes()
+            && (i
+                .bytes()
                 .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+                || i.bytes().all(|b| b.is_ascii_lowercase()))
     })
 }
 
