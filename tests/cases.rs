@@ -1585,3 +1585,28 @@ fn hex_run_inside_a_contact_does_not_keep_the_contact() {
         ),
     ]);
 }
+
+#[test]
+fn narrow_secret_inside_a_wider_one_redacts_the_whole() {
+    check(&[
+        (
+            concat!(
+                "Cookie: sess=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.",
+                "c2lnbmF0dXJl%2Bm0reS3cretTail9x"
+            ),
+            "Cookie: sess=<JWT_1>",
+        ),
+        (
+            concat!("token=ghp_abcdefghijklm", "nop1234%2Fsecret_tail_material"),
+            "token=<TOKEN_1>",
+        ),
+        // The merged span is numbered by its own text, not its inner token's.
+        (
+            concat!(
+                "Cookie: a=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl%2Btail9x; ",
+                "b=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl"
+            ),
+            "Cookie: a=<JWT_1>; b=<JWT_2>",
+        ),
+    ]);
+}

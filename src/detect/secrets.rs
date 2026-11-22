@@ -4,6 +4,7 @@
 //! always redacted, and contextual entropy that fires only on the value of a
 //! suspicious key. Private-key blocks span lines and are handled by the engine.
 
+use std::cmp::Reverse;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -282,6 +283,39 @@ fn cookies(line: &str, out: &mut Vec<Candidate>) {
 }
 
 pub fn detect(line: &str, out: &mut Vec<Candidate>) {
+    let from = out.len();
+    scan(line, out);
+    merge_overlaps(line, out, from);
+}
+
+/// Merge overlapping secrets in `out[from..]` into one span, labeled by its
+/// highest-rank member, so a narrow match inside a wider one can't leave the
+/// wider one's tail raw. Logins (`BareUser`) are left alone.
+fn merge_overlaps(line: &str, out: &mut Vec<Candidate>, from: usize) {
+    let (mut secrets, logins): (Vec<_>, Vec<_>) = out
+        .drain(from..)
+        .partition(|c| matches!(c.action, Action::Number { .. }));
+    secrets.sort_by_key(|c| (c.start, Reverse(c.end)));
+    for c in secrets {
+        match out[from..].last_mut() {
+            Some(last) if c.start < last.end => {
+                let (start, end) = (last.start, last.end.max(c.end));
+                if (c.rank, c.width()) > (last.rank, last.width()) {
+                    *last = c;
+                }
+                last.start = start;
+                last.end = end;
+                if let Action::Number { value, .. } = &mut last.action {
+                    *value = line[start..end].to_string();
+                }
+            }
+            _ => out.push(c),
+        }
+    }
+    out.extend(logins);
+}
+
+fn scan(line: &str, out: &mut Vec<Candidate>) {
     cookies(line, out);
     for prefix in PREFIX_TOKENS.iter() {
         for m in prefix.re.find_iter(line) {
