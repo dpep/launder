@@ -2,9 +2,9 @@
 //!
 //! Maps each distinct `(type, value)` to a stable placeholder for the life of
 //! one run, so a repeated value reuses its number ("user X did A then B" stays
-//! linkable). Identities (usernames / home dirs) share a single index space:
-//! the primary user renders as `~` / `<USER_1>`, additional homes as
-//! `<HOME_2>` / `<USER_2>`, …
+//! linkable). Identities (home owners, logins, path-proven users) share one
+//! index space in first-seen order. The first home owner's home renders as
+//! `~`; any other home as `<HOME_N>`, and the user anywhere as `<USER_N>`.
 //!
 //! The registry lives in memory and is discarded at exit. **No file is ever
 //! written** — a persisted map would be a re-identification key.
@@ -20,6 +20,8 @@ pub struct Registry {
     /// Username identities in first-seen order; index = position + 1.
     identities: Vec<String>,
     ident_index: HashMap<String, usize>,
+    /// The first home owner: the one identity whose home renders as `~`.
+    primary_home: Option<String>,
     /// Identities eligible for standalone-username redaction.
     bare_users: Vec<String>,
 }
@@ -54,24 +56,25 @@ impl Registry {
         index
     }
 
-    /// Register a home owner and return its rendered prefix: `~` for the primary
-    /// identity, `<HOME_N>` for the rest. `bare_eligible` enrolls the username
+    /// Register a home owner and return its rendered prefix: `~` for the first
+    /// home owner seen, `<HOME_N>` for the rest. `bare_eligible` enrolls the username
     /// for standalone redaction.
     pub fn home_prefix(&mut self, user: &str, bare_eligible: bool) -> String {
         let index = self.identity_index(user);
         if bare_eligible {
             self.enroll_bare(user);
         }
-        if index == 1 {
+        let primary = self.primary_home.get_or_insert_with(|| user.to_string());
+        if primary == user {
             "~".to_string()
         } else {
             format!("<HOME_{index}>")
         }
     }
 
-    /// Register a username a path proves and return its `<USER_N>`, enrolling
-    /// it for standalone redaction like a home owner.
-    pub fn path_user(&mut self, user: &str) -> String {
+    /// Register a username a path or login proves and return its `<USER_N>`,
+    /// enrolling it for standalone redaction like a home owner.
+    pub fn proven_user(&mut self, user: &str) -> String {
         self.enroll_bare(user);
         self.user_placeholder(user)
     }

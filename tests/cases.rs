@@ -1521,6 +1521,28 @@ fn watchlist_matches_any_case() {
 }
 
 #[test]
+fn only_a_home_owner_takes_the_tilde() {
+    let input = concat!(
+        "mongodb://alice:Zq8vN2kL",
+        "p4Rx@db.example.com/prod\n",
+        "/Users/jdoe/.kube/config\n",
+        "/tmp/pytest-of-carol/x /home/dave/y\n",
+        "login alice by jdoe"
+    );
+    // Logins and path-proven users number in the same space but don't claim
+    // `~`; a login is also scrubbed where it appears alone.
+    assert_eq!(
+        clean(input),
+        concat!(
+            "mongodb://<USER_1>:<PASSWORD_1>@db.example.com/prod\n",
+            "~/.kube/config\n",
+            "/tmp/pytest-of-<USER_3>/x <HOME_4>/y\n",
+            "login <USER_1> by <USER_2>"
+        )
+    );
+}
+
+#[test]
 fn only_and_except_apply_to_every_detectors_output() {
     let types = |only: Option<&str>, except: Option<&str>| Config {
         enabled: Config::resolve_types(only, except).unwrap(),
