@@ -957,3 +957,90 @@ fn ambiguous_pass_words_keep_the_entropy_gate() {
         ("token_type=bearer", "token_type=bearer"),
     ]);
 }
+
+#[test]
+fn credential_key_names_are_redacted() {
+    check(&[
+        (
+            concat!("credentials=Hk3Jd8Ws", "1Qz5Pm7R"),
+            "credentials=<SECRET_1>",
+        ),
+        (
+            concat!("client_secret: Hk3Jd8Ws", "1Qz5Pm7R"),
+            "client_secret: <SECRET_1>",
+        ),
+        (
+            concat!("encryption_key=Hk3Jd8Ws", "1Qz5Pm7R"),
+            "encryption_key=<SECRET_1>",
+        ),
+        (
+            concat!("signing_key=Hk3Jd8Ws", "1Qz5Pm7R"),
+            "signing_key=<SECRET_1>",
+        ),
+        (
+            concat!(
+                "session_id=Hk3Jd8Ws",
+                "1Qz5Pm7R sessionid=Qm7Tz9Lw",
+                "2Xc4Vb6N"
+            ),
+            "session_id=<SECRET_1> sessionid=<SECRET_2>",
+        ),
+        (
+            concat!("X-Session-Id: Hk3Jd8Ws", "1Qz5Pm7R"),
+            "X-Session-Id: <SECRET_1>",
+        ),
+        // A signature outranks the hex-digest keep.
+        (
+            concat!(
+                "/o?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=fe5f80f77d5fa3beca038a248ff027d0",
+                "445342fe2855ddc963176630326f1024&X-Amz-Expires=300"
+            ),
+            "/o?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Signature=<SECRET_1>&X-Amz-Expires=300",
+        ),
+        (
+            concat!(
+                "/c/b?sv=2021-08-06&sr=b&sig=Zx9Yw8Vu7Ts6",
+                "Rq5Po4Nm3%2BAbCd%3D"
+            ),
+            "/c/b?sv=2021-08-06&sr=b&sig=<SECRET_1>",
+        ),
+        (
+            concat!(
+                "DefaultEndpointsProtocol=https;AccountName=acct;AccountKey=Zx9Yw8Vu7Ts6",
+                "Rq5Po4Nm3==;EndpointSuffix=core.windows.net"
+            ),
+            "DefaultEndpointsProtocol=https;AccountName=acct;AccountKey=<SECRET_1>;EndpointSuffix=core.windows.net",
+        ),
+        (
+            "secret_name=prod/db/credentials",
+            "secret_name=prod/db/credentials",
+        ),
+    ]);
+}
+
+#[test]
+fn uuid_under_a_credential_key_is_a_credential() {
+    check(&[
+        (
+            concat!(
+                "//registry.npmjs.org/:_authToken=0a1b2c3d-",
+                "4e5f-4a7b-8c9d-0e1f2a3b4c5d"
+            ),
+            "//registry.npmjs.org/:_authToken=<SECRET_1>",
+        ),
+        (
+            concat!("HEROKU_API_KEY=0a1b2c3d-", "4e5f-4a7b-8c9d-0e1f2a3b4c5d"),
+            "HEROKU_API_KEY=<SECRET_1>",
+        ),
+        // A SHA-shaped token is still a token.
+        (
+            concat!("token=95f2a31c4e8b2d1f0a9e", "8d7c6b5a4f3e2d1c0b9a"),
+            "token=<SECRET_1>",
+        ),
+        // Diagnostic IDs under ordinary keys survive.
+        (
+            "request_id=7f3c2b1a-0e9d-4c7b-a5f4-e3d2c1b0a9f8 trace_id=4bf92f3577b34da6a3ce929d0e0e4736",
+            "request_id=7f3c2b1a-0e9d-4c7b-a5f4-e3d2c1b0a9f8 trace_id=4bf92f3577b34da6a3ce929d0e0e4736",
+        ),
+    ]);
+}

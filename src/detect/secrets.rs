@@ -8,7 +8,6 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use super::ids;
 use super::{Action, Candidate, Label};
 
 /// Known-prefix / structurally-shaped credentials. All map to `<TOKEN_N>`.
@@ -109,7 +108,7 @@ fn login(user: regex::Match, out: &mut Vec<Candidate>) {
 /// The match ends where the value begins; [`value_span`] reads the value.
 static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?i)\b(([a-z0-9_\-]*)(password|passwd|passphrase|pass|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|master[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]))\s*"#,
+        r#"(?i)\b(([a-z0-9_\-]*)(password|passwd|passphrase|pass|pwd|secret|token|credentials?|signature|sig|session(?:[_-]?id)?|(?:api|access|account|private|master|encryption|signing)[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]))\s*"#,
     )
     .unwrap()
 });
@@ -118,7 +117,7 @@ static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
 /// pattern defeats the regex crate's literal prefilter, so check these first.
 /// A regex, not an ASCII scan, so case folding matches `KEYED_VALUE` exactly.
 static KEYED_HINT: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)pass|pwd|secret|token|key|auth").unwrap());
+    LazyLock::new(|| Regex::new(r"(?i)pass|pwd|secret|token|cred|sig|session|key|auth").unwrap());
 
 /// `Cookie:` / `Set-Cookie:` header; its `name=value` pairs are split below.
 static COOKIE_HEADER: LazyLock<Regex> =
@@ -235,8 +234,8 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         };
         let (start, end) = value_span(line, caps.get(0).unwrap().end());
         let text = &line[start..end];
-        // Preserve diagnostic IDs even under a suspicious key.
-        if ids::is_uuid(text) || is_placeholder_value(text) || is_shell_cwd(key, text) {
+        // A UUID or SHA here is a credential: many services issue them as tokens.
+        if is_placeholder_value(text) || is_shell_cwd(key, text) {
             continue;
         }
         if gated
