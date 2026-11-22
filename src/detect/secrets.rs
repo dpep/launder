@@ -291,19 +291,24 @@ const KEYED_MIN_LEN: usize = 8;
 /// A value that reads as a name rather than a credential: words joined in one
 /// case (`my_secret_name`, `deploy_token_v2`, `GITHUB_TOKEN`, `REDACTED`),
 /// letter-only camel humps (`TokenProvider`), a date or duration, or a path
-/// or reference (`/run/secrets/db`, `$VAR`, `{{tmpl}}`). A word after the
-/// first may end in a short number; a longer digit run (`sess_5f4e3d…`), an
-/// all-digit PIN, or a URL (which can carry a session) is not a name.
+/// or reference (`/run/secrets/db`, `$VAR`, `%VAR%`, `{{tmpl}}`). A word after
+/// the first may end in a short number; a longer digit run (`sess_5f4e3d…`),
+/// an all-digit PIN, or a URL (which can carry a session) is not a name. A
+/// path's segments are words too, so base64 that opens with `/` is no path.
 static IDENTIFIER: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(concat!(
-        r"^(?:[a-z]+(?:[_.\-](?:[a-z]+[0-9]{0,3}|[0-9]{1,3}))*",
+    let word = r"(?:(?:[A-Z]?[a-z]+)+[0-9]{0,3}|[A-Z]+[0-9]{0,3}|[0-9]+)";
+    let segment = format!(r"\.?{word}(?:[_.\-]{word})*");
+    let path = format!(r"(?:\.\.?)?/(?:{segment}(?:/{segment})*/?)?");
+    let names = concat!(
+        r"\.?[a-z]+(?:[_.\-](?:[a-z]+[0-9]{0,3}|[0-9]{1,3}))*",
         r"|[A-Z]+(?:_(?:[A-Z]+[0-9]{0,3}|[0-9]{1,3}))*",
         r"|[a-z]*(?:[A-Z][a-z]{2,})+",
         r"|[0-9\-:TZ.]*[\-:TZ.][0-9\-:TZ.]*",
         r"|[a-z0-9]+(?:/[a-z0-9_.\-]+)+",
-        r"|[/.$%{].*)$",
-    ))
-    .unwrap()
+        r"|\$(?:[A-Z_][A-Z0-9_]*|[a-z_][a-z0-9_]*)|\$\{[A-Za-z_][^}]*\}",
+        r"|%[A-Za-z_]+%|\{\{.*\}\}",
+    );
+    Regex::new(&format!("^(?:{names}|{path})$")).unwrap()
 });
 
 fn is_identifier_shaped(s: &str) -> bool {

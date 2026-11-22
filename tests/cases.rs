@@ -1875,3 +1875,64 @@ fn watch_terms_match_any_case_beyond_ascii() {
     // A case pair of different byte lengths still leaves offsets intact.
     check_with(cfg, &[("İ ZOË ops@dpep.io", "İ <TERM_1> <EMAIL_1>")]);
 }
+
+// --- freeze round: hunt r3 fixes ---
+
+#[test]
+fn a_secret_that_starts_like_a_reference_is_redacted() {
+    check(&[
+        (
+            concat!(
+                "aws_secret_access_key = /K7MDENGbPxRfiCYw",
+                "JalrXUtnFEMIEXAMPLEKEY"
+            ),
+            "aws_secret_access_key = <SECRET_1>",
+        ),
+        (
+            concat!(
+                "AccountName=acct;AccountKey=/Zx9Yw8Vu7Ts6Rq5Po4Nm3",
+                "Lk2Ji1AbCdEfGhIjKlMnOp==;EndpointSuffix=core.windows.net"
+            ),
+            "AccountName=acct;AccountKey=<SECRET_1>;EndpointSuffix=core.windows.net",
+        ),
+        (
+            concat!(
+                "https://x.blob.core.windows.net/c/b?sp=r&sig=%2FZx9Yw8Vu7Ts6",
+                "Rq5Po4Nm3Lk2Ji1AbCdEf%3D"
+            ),
+            "https://x.blob.core.windows.net/c/b?sp=r&sig=<SECRET_1>",
+        ),
+        (
+            concat!(
+                "GET /cb?access_token=%2Fabc9Yw8Vu7Ts6",
+                "Rq5Po4Nm3Lk2Ji1 HTTP/1.1"
+            ),
+            "GET /cb?access_token=<SECRET_1> HTTP/1.1",
+        ),
+        (
+            concat!("X-Api-Key: /9f8e7d6c5b4a3928", "1706f5e4d3c2b1a0"),
+            "X-Api-Key: <SECRET_1>",
+        ),
+        (
+            concat!(
+                r#""client_secret": ".Zx9Yw8Vu7Ts6Rq5Po"#,
+                r#"4Nm3Lk2Ji1AbCdEf""#
+            ),
+            r#""client_secret": "<SECRET_1>""#,
+        ),
+        (
+            concat!("api_key=$Zx9Yw8Vu7Ts6", "Rq5Po4Nm3Lk2"),
+            "api_key=<SECRET_1>",
+        ),
+        // Real references stay readable.
+        ("secret=/etc/app/secret.pem", "secret=/etc/app/secret.pem"),
+        ("secret=../config/master.key", "secret=../config/master.key"),
+        ("token=$GITHUB_TOKEN", "token=$GITHUB_TOKEN"),
+        ("secret=${DB_PASSWORD}", "secret=${DB_PASSWORD}"),
+        ("key=%APPDATA%", "key=%APPDATA%"),
+        ("api_key=%APPDATA%", "api_key=%APPDATA%"),
+        ("token={{ secrets.TOKEN }}", "token={{ secrets.TOKEN }}"),
+        ("token={{secrets.TOKEN}}", "token={{secrets.TOKEN}}"),
+        ("secret=.env.production", "secret=.env.production"),
+    ]);
+}
