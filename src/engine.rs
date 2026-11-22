@@ -37,7 +37,8 @@ pub struct Engine {
     reg: Registry,
     cfg: Config,
     line_no: usize,
-    in_private_key: bool,
+    /// An open PEM private-key block: body lines suppressed so far.
+    open_key: Option<usize>,
     /// Literal `$HOME` prefix and its owner, for collapsing non-standard homes.
     home: Option<(String, String)>,
 }
@@ -59,7 +60,7 @@ impl Engine {
             reg,
             cfg,
             line_no: 0,
-            in_private_key: false,
+            open_key: None,
             home,
         }
     }
@@ -70,7 +71,7 @@ impl Engine {
 
         // PEM private-key blocks span lines; collapse the whole block to one
         // <PRIVATE_KEY> placeholder.
-        if secrets_on && self.in_private_key {
+        if secrets_on && self.open_key.is_some() {
             return self.continue_private_key(line);
         }
 
@@ -80,7 +81,7 @@ impl Engine {
         let text = view.as_ref();
         let mut candidates = Vec::new();
         if secrets_on && let Some((start, end, continues)) = detect::secrets::private_key(text) {
-            self.in_private_key = continues;
+            self.open_key = continues.then_some(0);
             candidates.push(Candidate {
                 start,
                 end,
@@ -144,6 +145,13 @@ impl Engine {
             output: Some(output),
             findings,
         }
+    }
+
+    /// Mark the end of one input source (a file, or stdin at EOF). A private-key
+    /// block never spans sources: an open one is closed here, returning how
+    /// many body lines it suppressed so the caller can warn.
+    pub fn end_input(&mut self) -> Option<usize> {
+        self.open_key.take()
     }
 
     /// Turn a resolved candidate into a finding with its concrete replacement.
@@ -222,7 +230,7 @@ impl Engine {
 
     fn continue_private_key(&mut self, line: &str) -> LineResult {
         if let Some(after) = detect::secrets::private_key_end(line) {
-            self.in_private_key = false;
+            self.open_key = None;
             let output = if after.trim().is_empty() {
                 None
             } else {
@@ -234,6 +242,9 @@ impl Engine {
             };
         }
         // Body line: suppress entirely.
+        if let Some(n) = &mut self.open_key {
+            *n += 1;
+        }
         LineResult {
             output: None,
             findings: vec![],

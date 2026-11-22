@@ -77,3 +77,30 @@ fn invalid_utf8_is_replaced_and_the_run_continues() {
     assert_eq!(code, 0);
     assert_eq!(out, "bad \u{FFFD} byte <EMAIL_1>\nnext <EMAIL_2>\n");
 }
+
+/// A fresh scratch directory under the system temp dir, unique per test.
+fn scratch(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("launder-cli-{}-{name}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+#[test]
+fn unterminated_private_key_is_closed_at_each_file() {
+    let dir = scratch("pem");
+    let a = dir.join("a.log");
+    let b = dir.join("b.log");
+    std::fs::write(&a, "-----BEGIN RSA PRIVATE KEY-----\nMIIE\nabcd\n").unwrap();
+    std::fs::write(&b, "mail ops@dpep.io\n").unwrap();
+    let (code, out, err) = run(&[a.to_str().unwrap(), b.to_str().unwrap()], b"");
+    assert_eq!(code, 0);
+    assert_eq!(out, "<PRIVATE_KEY>\nmail <EMAIL_1>\n");
+    assert_eq!(
+        err,
+        format!(
+            "launder: unterminated private key in {}; 2 lines suppressed\n",
+            a.display()
+        )
+    );
+}

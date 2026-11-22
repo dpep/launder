@@ -7,28 +7,29 @@ use std::io::{self, BufRead, BufReader, Read};
 
 use anyhow::{Context, Result};
 
-/// A source of lines: stdin or a sequence of files, read lazily.
-pub struct LineReader {
-    sources: Vec<Source>,
-    current: Option<BufReader<Box<dyn Read>>>,
+/// What the reader yields: a line, or the end of one input source.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Input {
+    /// A line without its trailing newline.
+    Line(String),
+    /// The named source is exhausted (`stdin` or the file path as given).
+    End(String),
 }
 
-enum Source {
-    Stdin,
-    File(String),
+/// A source of lines: stdin or a sequence of files, read lazily.
+pub struct LineReader {
+    sources: Vec<String>,
+    current: Option<(String, BufReader<Box<dyn Read>>)>,
+    use_stdin: bool,
 }
 
 impl LineReader {
     /// Build a reader over `files`, or stdin if `files` is empty.
     pub fn new(files: &[String]) -> Self {
-        let sources = if files.is_empty() {
-            vec![Source::Stdin]
-        } else {
-            files.iter().cloned().map(Source::File).collect()
-        };
         LineReader {
-            sources: sources.into_iter().rev().collect(),
+            sources: files.iter().rev().cloned().collect(),
             current: None,
+            use_stdin: files.is_empty(),
         }
     }
 
@@ -37,48 +38,45 @@ impl LineReader {
     pub fn would_block(&self) -> bool {
         self.current
             .as_ref()
-            .is_none_or(|r| memchr::memchr(b'\n', r.buffer()).is_none())
+            .is_none_or(|(_, r)| memchr::memchr(b'\n', r.buffer()).is_none())
     }
 
-    /// Read the next line without its trailing newline. `Ok(None)` at EOF.
-    pub fn next_line(&mut self) -> Result<Option<String>> {
-        loop {
-            if self.current.is_none() {
-                match self.sources.pop() {
-                    None => return Ok(None),
-                    Some(Source::Stdin) => {
-                        self.current = Some(BufReader::new(Box::new(io::stdin())));
-                    }
-                    Some(Source::File(path)) => {
-                        let f = File::open(&path).with_context(|| format!("reading {path}"))?;
-                        self.current = Some(BufReader::new(Box::new(f)));
-                    }
-                }
-            }
-
-            let reader = self.current.as_mut().unwrap();
-            let mut buf = Vec::new();
-            let n = reader
-                .read_until(b'\n', &mut buf)
-                .context("reading input")?;
-            if n == 0 {
-                self.current = None;
-                continue;
-            }
-            // Strip a single trailing \n (and \r) — restored by the caller.
-            if buf.ends_with(b"\n") {
-                buf.pop();
-                if buf.ends_with(b"\r") {
-                    buf.pop();
-                }
-            }
-            // Invalid UTF-8 becomes U+FFFD; the valid text around it is still
-            // scanned, and no raw byte of unknown meaning reaches the output.
-            let line = match String::from_utf8(buf) {
-                Ok(s) => s,
-                Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
+    /// The next line or source boundary. `Ok(None)` once every source is done.
+    pub fn read(&mut self) -> Result<Option<Input>> {
+        if self.current.is_none() {
+            let (name, source): (String, Box<dyn Read>) = if std::mem::take(&mut self.use_stdin) {
+                ("stdin".into(), Box::new(io::stdin()))
+            } else if let Some(path) = self.sources.pop() {
+                let f = File::open(&path).with_context(|| format!("reading {path}"))?;
+                (path, Box::new(f))
+            } else {
+                return Ok(None);
             };
-            return Ok(Some(line));
+            self.current = Some((name, BufReader::new(source)));
         }
+
+        let (name, reader) = self.current.as_mut().unwrap();
+        let mut buf = Vec::new();
+        let n = reader
+            .read_until(b'\n', &mut buf)
+            .with_context(|| format!("reading {name}"))?;
+        if n == 0 {
+            let (name, _) = self.current.take().unwrap();
+            return Ok(Some(Input::End(name)));
+        }
+        // Strip a single trailing \n (and \r) — restored by the caller.
+        if buf.ends_with(b"\n") {
+            buf.pop();
+            if buf.ends_with(b"\r") {
+                buf.pop();
+            }
+        }
+        // Invalid UTF-8 becomes U+FFFD; the valid text around it is still
+        // scanned, and no raw byte of unknown meaning reaches the output.
+        let line = match String::from_utf8(buf) {
+            Ok(s) => s,
+            Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
+        };
+        Ok(Some(Input::Line(line)))
     }
 }

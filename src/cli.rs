@@ -11,7 +11,7 @@ use serde_json::json;
 use crate::config::{self, Config};
 use crate::emit;
 use crate::engine::{Engine, Finding};
-use crate::input::LineReader;
+use crate::input::{Input, LineReader};
 use crate::report::Report;
 use crate::watchlist::Watchlist;
 
@@ -112,8 +112,18 @@ fn execute(cli: &Cli) -> Result<()> {
         if reader.would_block() {
             out.flush()?;
         }
-        let Some(line) = reader.next_line()? else {
-            break;
+        let line = match reader.read()? {
+            None => break,
+            Some(Input::Line(line)) => line,
+            Some(Input::End(name)) => {
+                if let Some(n) = engine.end_input() {
+                    let lines = if n == 1 { "line" } else { "lines" };
+                    eprintln!(
+                        "launder: unterminated private key in {name}; {n} {lines} suppressed"
+                    );
+                }
+                continue;
+            }
         };
         let result = engine.process_line(&line);
         report.record(&result.findings);
