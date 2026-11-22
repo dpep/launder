@@ -185,10 +185,10 @@ impl Engine {
         }
     }
 
-    /// Mark the end of one input source (a file, or stdin at EOF). A private-key
-    /// block never spans sources: an open one is closed here, returning how
-    /// many body lines it suppressed so the caller can warn.
-    pub fn end_input(&mut self) -> Option<usize> {
+    /// Mark the end of all input. An open private-key block is closed here,
+    /// returning how many body lines it suppressed so the caller can warn. It
+    /// spans files: a key split across two inputs must not leak its second half.
+    pub fn finish(&mut self) -> Option<usize> {
         self.open_key.take()
     }
 

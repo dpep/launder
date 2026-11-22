@@ -177,19 +177,15 @@ fn execute(cli: &Cli) -> Result<bool> {
         let line = match reader.read()? {
             None => break,
             Some(Input::Line(line)) => line,
-            Some(Input::End(name)) => {
-                if let Some(n) = engine.end_input() {
-                    let lines = if n == 1 { "line" } else { "lines" };
-                    eprintln!(
-                        "launder: unterminated private key in {name}; {n} {lines} suppressed"
-                    );
-                }
-                continue;
-            }
+            Some(Input::End(_)) => continue,
         };
         let result = engine.process_line(&line);
         report.record(&result.findings);
         emitter.line(&result)?;
+    }
+    if let Some(n) = engine.finish() {
+        let lines = if n == 1 { "line" } else { "lines" };
+        eprintln!("launder: unterminated private key; {n} {lines} suppressed to the end of input");
     }
     emitter.finish(&report)?;
 

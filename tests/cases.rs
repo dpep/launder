@@ -1326,7 +1326,7 @@ fn percent_encoded_url_credentials_are_redacted() {
 // --- cli / output lane ---
 
 #[test]
-fn unterminated_private_key_ends_at_input_boundary() {
+fn unterminated_private_key_ends_at_end_of_input() {
     let mut engine = Engine::new(Config::default());
     for line in [
         "-----BEGIN RSA PRIVATE KEY-----",
@@ -1335,9 +1335,9 @@ fn unterminated_private_key_ends_at_input_boundary() {
     ] {
         engine.process_line(line);
     }
-    // The boundary reports the suppressed body lines and closes the block.
-    assert_eq!(engine.end_input(), Some(2));
-    assert_eq!(engine.end_input(), None);
+    // The end reports the suppressed body lines and closes the block.
+    assert_eq!(engine.finish(), Some(2));
+    assert_eq!(engine.finish(), None);
     let next = engine.process_line("mail ops@dpep.io");
     assert_eq!(next.output.as_deref(), Some("mail <EMAIL_1>"));
 }

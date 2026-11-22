@@ -158,20 +158,33 @@ fn output_that_names_an_input_is_refused() {
 }
 
 #[test]
-fn unterminated_private_key_is_closed_at_each_file() {
+fn private_key_split_across_files_stays_suppressed() {
     let dir = scratch("pem");
     let a = dir.join("a.log");
     let b = dir.join("b.log");
-    std::fs::write(&a, "-----BEGIN RSA PRIVATE KEY-----\nMIIE\nabcd\n").unwrap();
-    std::fs::write(&b, "mail ops@dpep.io\n").unwrap();
+    std::fs::write(&a, "start\n-----BEGIN RSA PRIVATE KEY-----\nMIIE\n").unwrap();
+    std::fs::write(
+        &b,
+        "abcd\n-----END RSA PRIVATE KEY-----\nmail ops@dpep.io\n",
+    )
+    .unwrap();
+    let (code, out, err) = run(&[a.to_str().unwrap(), b.to_str().unwrap()], b"");
+    assert_eq!((code, err.as_str()), (0, ""));
+    assert_eq!(out, "start\n<PRIVATE_KEY>\nmail <EMAIL_1>\n");
+}
+
+#[test]
+fn unterminated_private_key_is_reported_at_end_of_input() {
+    let dir = scratch("pem-open");
+    let a = dir.join("a.log");
+    let b = dir.join("b.log");
+    std::fs::write(&a, "-----BEGIN RSA PRIVATE KEY-----\nMIIE\n").unwrap();
+    std::fs::write(&b, "abcd\n").unwrap();
     let (code, out, err) = run(&[a.to_str().unwrap(), b.to_str().unwrap()], b"");
     assert_eq!(code, 0);
-    assert_eq!(out, "<PRIVATE_KEY>\nmail <EMAIL_1>\n");
+    assert_eq!(out, "<PRIVATE_KEY>\n");
     assert_eq!(
         err,
-        format!(
-            "launder: unterminated private key in {}; 2 lines suppressed\n",
-            a.display()
-        )
+        "launder: unterminated private key; 2 lines suppressed to the end of input\n"
     );
 }
