@@ -5,6 +5,8 @@
 //! home path are registered before standalone-username (bare) detection runs,
 //! so `user=<name>` on the same line still maps.
 
+use std::borrow::Cow;
+
 use crate::config::Config;
 use crate::detect::literal::{Boundary, Term};
 use crate::detect::{self, Action, Candidate, Kind, resolve};
@@ -90,10 +92,19 @@ impl Engine {
         if secrets_on && self.open_key.is_some() {
             return self.continue_private_key(line);
         }
+        self.scan(line, 0)
+    }
 
+    /// Detect and replace over `line[skip..]`; findings and columns index the
+    /// whole line, and the output is the laundered text from `skip` on.
+    fn scan(&mut self, line: &str, skip: usize) -> LineResult {
+        let secrets_on = self.cfg.enabled(Kind::Secret);
         // Phase A: every enabled detector except bare-username.
         // Detectors read the escape-blanked view; replacements index `line`.
-        let view = detect::detection_view(line);
+        let mut view = detect::detection_view(line);
+        if skip > 0 {
+            view = Cow::Owned(" ".repeat(skip) + &view[skip..]);
+        }
         let text = view.as_ref();
         // Literal terms match case-insensitively; ASCII lowering keeps offsets.
         let lower = text.to_ascii_lowercase();
@@ -166,10 +177,10 @@ impl Engine {
 
         findings.sort_by_key(|f| f.byte_start);
         set_columns(line, &mut findings);
-        let output = render(line, &findings);
+        let mut output = render(line, &findings);
         LineResult {
             line: self.line_no,
-            output: Some(output),
+            output: Some(output.split_off(skip)),
             findings,
         }
     }
@@ -271,14 +282,13 @@ impl Engine {
     fn continue_private_key(&mut self, line: &str) -> LineResult {
         if let Some(after) = detect::secrets::private_key_end(line) {
             self.open_key = None;
-            let output = if after.trim().is_empty() {
-                None
-            } else {
-                Some(after.to_string())
-            };
+            if !after.trim().is_empty() {
+                // The text after the END marker is ordinary log text.
+                return self.scan(line, line.len() - after.len());
+            }
             return LineResult {
                 line: self.line_no,
-                output,
+                output: None,
                 findings: vec![],
             };
         }

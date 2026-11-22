@@ -1787,3 +1787,25 @@ fn token_in_the_login_position_is_a_secret() {
         ),
     ]);
 }
+
+// --- hunt r2 fix lane: engine / cli / input ---
+
+#[test]
+fn text_after_a_private_key_end_marker_is_scanned() {
+    let input = concat!(
+        "-----BEGIN RSA PRIVATE KEY-----\nMIIabc\n",
+        "-----END RSA PRIVATE KEY----- password=hunter2xyz token=ghp_",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa /home/zedd/x"
+    );
+    let (out, findings) = launder(Config::default(), input);
+    assert_eq!(
+        out,
+        "<PRIVATE_KEY>\n password=<PASSWORD_1> token=<TOKEN_1> ~/x"
+    );
+    // Columns index the original line, END marker included.
+    let token = findings
+        .iter()
+        .find(|f| f.subtype == Some("github"))
+        .unwrap();
+    assert_eq!((token.line, token.col), (3, 57));
+}
