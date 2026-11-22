@@ -87,6 +87,20 @@ fn scratch(name: &str) -> std::path::PathBuf {
 }
 
 #[test]
+fn output_that_names_an_input_is_refused() {
+    let dir = scratch("same");
+    let log = dir.join("app.log");
+    std::fs::write(&log, "mail ops@dpep.io\n").unwrap();
+    let path = log.to_str().unwrap();
+    // A second spelling of the same file must be caught too.
+    let alias = dir.join(".").join("app.log");
+    let (code, _, err) = run(&["-o", alias.to_str().unwrap(), path], b"");
+    assert_eq!(code, 2);
+    assert!(err.contains("is also an input"), "{err}");
+    assert_eq!(std::fs::read_to_string(&log).unwrap(), "mail ops@dpep.io\n");
+}
+
+#[test]
 fn unterminated_private_key_is_closed_at_each_file() {
     let dir = scratch("pem");
     let a = dir.join("a.log");

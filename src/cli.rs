@@ -101,7 +101,7 @@ fn execute(cli: &Cli) -> Result<()> {
 
     let mut engine = Engine::new(cfg.clone());
     let mut reader = LineReader::new(&cli.files);
-    let mut out = open_output(cli.output.as_deref())?;
+    let mut out = open_output(cli.output.as_deref(), &cli.files)?;
     let mut report = Report::new();
 
     // Accumulators for buffered JSON mode.
@@ -176,13 +176,34 @@ fn execute(cli: &Cli) -> Result<()> {
     Ok(())
 }
 
-fn open_output(path: Option<&str>) -> Result<Box<dyn Write>> {
+fn open_output(path: Option<&str>, inputs: &[String]) -> Result<Box<dyn Write>> {
     match path {
-        None => Ok(Box::new(BufWriter::new(io::stdout()))),
-        Some("-") => Ok(Box::new(BufWriter::new(io::stdout()))),
+        None | Some("-") => Ok(Box::new(BufWriter::new(io::stdout()))),
         Some(p) => {
+            // Creating the output truncates it before the input is read.
+            if let Some(input) = inputs.iter().find(|i| same_file(p, i)) {
+                anyhow::bail!("-o {p} is also an input ({input}); write somewhere else");
+            }
             let f = File::create(p).map_err(|e| anyhow::anyhow!("writing {p}: {e}"))?;
             Ok(Box::new(BufWriter::new(f)))
         }
+    }
+}
+
+/// Whether two paths name one existing file, through any alias or hard link.
+#[cfg(unix)]
+fn same_file(a: &str, b: &str) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (std::fs::metadata(a), std::fs::metadata(b)) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn same_file(a: &str, b: &str) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
     }
 }
