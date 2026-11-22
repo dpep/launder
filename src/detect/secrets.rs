@@ -42,6 +42,7 @@ static PREFIX_TOKENS: LazyLock<Vec<Prefix>> = LazyLock::new(|| {
         p(r"\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b", "stripe"),
         p(r"\bglpat-[A-Za-z0-9_\-]{20,}\b", "gitlab"),
         p(r"\bnpm_[A-Za-z0-9]{36}\b", "npm"),
+        p(r"\bdckr_pat_[A-Za-z0-9_\-]{20,}", "docker"),
         p(
             r"\bSG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}\b",
             "sendgrid",

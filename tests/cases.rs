@@ -1707,3 +1707,14 @@ fn github_actions_add_mask_value_is_a_secret() {
         ("::add-mask::***", "::add-mask::***"),
     ]);
 }
+
+#[test]
+fn docker_hub_pat_is_redacted() {
+    check(&[(
+        concat!(
+            "echo dckr_pat_2YotnFZFEjr1",
+            "zCsicMWpAA9xYz | docker login"
+        ),
+        "echo <TOKEN_1> | docker login",
+    )]);
+}
