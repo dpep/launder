@@ -2010,3 +2010,15 @@ fn a_long_one_word_letter_run_is_a_secret() {
         ("secret_key=SECRET_KEY_BASE", "secret_key=SECRET_KEY_BASE"),
     ]);
 }
+
+#[test]
+fn an_app_specific_password_is_a_secret() {
+    check(&[
+        ("token=abcd-efgh-ijkl-mnop", "token=<SECRET_1>"),
+        (
+            "secret=user-profile-cache-key",
+            "secret=user-profile-cache-key",
+        ),
+        ("secret=abcd-efgh-ijkl", "secret=abcd-efgh-ijkl"),
+    ]);
+}

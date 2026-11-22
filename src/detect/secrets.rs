@@ -319,10 +319,16 @@ fn is_identifier_shaped(s: &str) -> bool {
 /// several words (`user_profile_cache`), random letters have one.
 const LETTER_RUN_MIN_LEN: usize = 16;
 
-fn is_letter_run(s: &str) -> bool {
-    s.len() >= LETTER_RUN_MIN_LEN
-        && (s.bytes().all(|b| b.is_ascii_lowercase()) || s.bytes().all(|b| b.is_ascii_uppercase()))
+/// Letters that pass as a name but are generated: a long one-word run, or
+/// Apple's app-specific password shape (`abcd-efgh-ijkl-mnop`).
+fn is_random_letters(s: &str) -> bool {
+    let one_case =
+        s.bytes().all(|b| b.is_ascii_lowercase()) || s.bytes().all(|b| b.is_ascii_uppercase());
+    (one_case && s.len() >= LETTER_RUN_MIN_LEN) || APP_PASSWORD.is_match(s)
 }
+
+static APP_PASSWORD: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[a-z]{4}(?:-[a-z]{4}){3}$").unwrap());
 
 /// Cookie values are opaque session material, so there is no shape gate —
 /// only the length floor, which keeps preferences like `locale=en` readable.
@@ -607,7 +613,7 @@ fn keyed(
     }
     if gated
         && (text.chars().count() < KEYED_MIN_LEN
-            || (is_identifier_shaped(text) && !is_letter_run(text)))
+            || (is_identifier_shaped(text) && !is_random_letters(text)))
     {
         return;
     }
