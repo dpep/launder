@@ -170,6 +170,8 @@ fn execute(cli: &Cli) -> Result<bool> {
     let mut emitter = Emitter::new(out, format, cfg.with_originals);
     let mut engine = Engine::new(cfg);
     let mut report = Report::new();
+    // Where an open private key began; it may swallow later files whole.
+    let mut key_start = None;
 
     loop {
         if reader.would_block() {
@@ -181,12 +183,19 @@ fn execute(cli: &Cli) -> Result<bool> {
             Some(Input::End) => continue,
         };
         let result = engine.process_line(&line);
+        if engine.private_key_start() == Some(result.line) {
+            key_start = reader.position();
+        }
         report.record(&result.findings);
         emitter.line(&result)?;
     }
     if let Some(n) = engine.finish() {
         let lines = if n == 1 { "line" } else { "lines" };
-        eprintln!("launder: unterminated private key; {n} {lines} suppressed to the end of input");
+        let at = tilde(&key_start.unwrap_or_default());
+        eprintln!(
+            "launder: unterminated private key started at {at}; \
+             {n} {lines} suppressed to the end of input"
+        );
     }
     emitter.finish(&report)?;
 

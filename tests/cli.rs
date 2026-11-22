@@ -217,18 +217,35 @@ fn private_key_split_across_files_stays_suppressed() {
 }
 
 #[test]
-fn unterminated_private_key_is_reported_at_end_of_input() {
+fn unterminated_private_key_is_reported_where_it_started() {
     let dir = scratch("pem-open");
     let a = dir.join("a.log");
     let b = dir.join("b.log");
-    std::fs::write(&a, "-----BEGIN RSA PRIVATE KEY-----\nMIIE\n").unwrap();
-    std::fs::write(&b, "abcd\n").unwrap();
-    let (code, out, err) = run(&[a.to_str().unwrap(), b.to_str().unwrap()], b"");
-    assert_eq!(code, 0);
-    assert_eq!(out, "<PRIVATE_KEY>\n");
+    let c = dir.join("c.log");
+    std::fs::write(&a, "clean\n").unwrap();
+    std::fs::write(&b, "x\n-----BEGIN RSA PRIVATE KEY-----\nMIIE\n").unwrap();
+    std::fs::write(&c, "abcd\n").unwrap();
+    let out = launder()
+        .env("HOME", &dir)
+        .args([&a, &b, &c])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "clean\nx\n<PRIVATE_KEY>\n"
+    );
+    assert_eq!(
+        String::from_utf8(out.stderr).unwrap(),
+        "launder: unterminated private key started at ~/b.log:2; \
+         2 lines suppressed to the end of input\n"
+    );
+
+    let (_, _, err) = run(&[], b"-----BEGIN RSA PRIVATE KEY-----\nMIIE\n");
     assert_eq!(
         err,
-        "launder: unterminated private key; 2 lines suppressed to the end of input\n"
+        "launder: unterminated private key started at stdin:1; \
+         1 line suppressed to the end of input\n"
     );
 }
 

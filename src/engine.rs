@@ -42,8 +42,9 @@ pub struct Engine {
     reg: Registry,
     cfg: Config,
     line_no: usize,
-    /// An open PEM private-key block: body lines suppressed so far.
-    open_key: Option<usize>,
+    /// An open PEM private-key block: the line it started on, and the body
+    /// lines suppressed so far.
+    open_key: Option<(usize, usize)>,
     /// Literal `$HOME` prefix and its owner, for collapsing non-standard homes.
     home: Option<(String, String)>,
     /// The machine's own hostnames.
@@ -110,7 +111,7 @@ impl Engine {
         let lower = detect::literal::fold(text);
         let mut candidates = Vec::new();
         if secrets_on && let Some((start, end, continues)) = detect::secrets::private_key(text) {
-            self.open_key = continues.then_some(0);
+            self.open_key = continues.then_some((self.line_no, 0));
             candidates.push(Candidate {
                 start,
                 end,
@@ -192,7 +193,12 @@ impl Engine {
     /// returning how many body lines it suppressed so the caller can warn. It
     /// spans files: a key split across two inputs must not leak its second half.
     pub fn finish(&mut self) -> Option<usize> {
-        self.open_key.take()
+        self.open_key.take().map(|(_, n)| n)
+    }
+
+    /// The line an open private-key block started on.
+    pub fn private_key_start(&self) -> Option<usize> {
+        self.open_key.map(|(start, _)| start)
     }
 
     /// Turn a resolved candidate into a finding with its concrete replacement.
@@ -299,7 +305,7 @@ impl Engine {
             };
         }
         // Body line: suppress entirely.
-        if let Some(n) = &mut self.open_key {
+        if let Some((_, n)) = &mut self.open_key {
             *n += 1;
         }
         LineResult {

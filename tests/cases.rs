@@ -1336,7 +1336,9 @@ fn unterminated_private_key_ends_at_end_of_input() {
         engine.process_line(line);
     }
     // The end reports the suppressed body lines and closes the block.
+    assert_eq!(engine.private_key_start(), Some(1));
     assert_eq!(engine.finish(), Some(2));
+    assert_eq!(engine.private_key_start(), None);
     assert_eq!(engine.finish(), None);
     let next = engine.process_line("mail ops@dpep.io");
     assert_eq!(next.output.as_deref(), Some("mail <EMAIL_1>"));

@@ -21,6 +21,8 @@ pub struct LineReader {
     /// Sources not yet started, last first.
     sources: Vec<(String, Box<dyn Read>)>,
     current: Option<(String, BufReader<Box<dyn Read>>)>,
+    /// Lines read from the current source.
+    line: usize,
     reads_stdin: bool,
 }
 
@@ -48,6 +50,7 @@ impl LineReader {
         Ok(LineReader {
             sources,
             current: None,
+            line: 0,
             reads_stdin: files.is_empty() || files.iter().any(|f| f == "-"),
         })
     }
@@ -65,6 +68,12 @@ impl LineReader {
             .is_none_or(|(_, r)| memchr::memchr(b'\n', r.buffer()).is_none())
     }
 
+    /// Where the last line read came from: `FILE:LINE`.
+    pub fn position(&self) -> Option<String> {
+        let (name, _) = self.current.as_ref()?;
+        Some(format!("{name}:{}", self.line))
+    }
+
     /// The next line or source boundary. `Ok(None)` once every source is done.
     pub fn read(&mut self) -> Result<Option<Input>> {
         if self.current.is_none() {
@@ -72,6 +81,7 @@ impl LineReader {
                 return Ok(None);
             };
             self.current = Some((name, BufReader::new(source)));
+            self.line = 0;
         }
 
         let (name, reader) = self.current.as_mut().unwrap();
@@ -83,6 +93,7 @@ impl LineReader {
             self.current = None;
             return Ok(Some(Input::End));
         }
+        self.line += 1;
         // Strip a single trailing \n (and \r) — restored by the caller.
         if buf.ends_with(b"\n") {
             buf.pop();
