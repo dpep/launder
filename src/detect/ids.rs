@@ -1,4 +1,4 @@
-//! Diagnostic-ID preservation (§5). UUIDs, git SHAs, and other hex digests are
+//! Diagnostic-ID preservation. UUIDs, git SHAs, and other hex digests are
 //! diagnostic gold — they must survive laundering untouched. These emit
 //! `Keep` spans that block weaker detectors (e.g. keyed-entropy) from claiming
 //! them, while still yielding to a genuine `Secret` match.

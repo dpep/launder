@@ -1,4 +1,4 @@
-//! Per-line pipeline (§6): detect → resolve → assign → emit.
+//! Per-line pipeline: detect → resolve → assign → emit.
 //!
 //! The engine owns the run-lifetime [`Registry`] and the small amount of
 //! cross-line state (the PEM private-key block). Identities discovered from a
@@ -18,7 +18,7 @@ pub struct Finding {
     pub col: usize,
     pub len: usize,
     pub replacement: String,
-    /// The raw matched text. Emitted only per the §7 rules (never for secrets).
+    /// The raw matched text. Never emitted for secrets.
     pub original: String,
     /// Byte span within the source line (internal; not serialized).
     byte_start: usize,

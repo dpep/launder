@@ -1,4 +1,4 @@
-//! Round-out detectors (§5): email, IP, hostname, MAC.
+//! Email, IP, hostname, and MAC detectors.
 //!
 //! Asymmetric bias: keep loopback + RFC1918 IPs and only the conservative
 //! `*.local/*.internal/*.corp` hostnames by default — over-scrubbing destroys a

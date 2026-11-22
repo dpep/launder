@@ -1,4 +1,4 @@
-//! Pillar 1 — home / username / tmpdir paths (§5).
+//! Home / username / tmpdir paths.
 //!
 //! Collapse the personal prefix of a home path to `~` (or `<HOME_N>`) while
 //! preserving the relative tail, separators, line numbers, and extension. The

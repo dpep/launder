@@ -1,5 +1,5 @@
 //! Detector core: candidate spans, the placeholder vocabulary, and the
-//! precedence-based overlap resolution (§6.3).
+//! precedence-based overlap resolution.
 //!
 //! Each detector reads a line and emits [`Candidate`] spans. They run
 //! independently and may overlap; [`resolve`] reduces them to a non-overlapping
@@ -185,7 +185,7 @@ impl Label {
     }
 }
 
-/// Resolve overlapping candidates to a non-overlapping set by precedence (§6.3).
+/// Resolve overlapping candidates to a non-overlapping set by precedence.
 ///
 /// Greedy weighted-interval selection: sort by precedence, then rank, then
 /// length (longest-first within a detector), then position; accept a candidate

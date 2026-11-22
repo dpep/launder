@@ -1,4 +1,4 @@
-//! Pillar 2 — secrets / tokens (§5). Highest stakes: bias toward over-detection.
+//! Secrets / tokens. Highest stakes: bias toward over-detection.
 //!
 //! Two layers: high-precision known-prefix / structural credentials that are
 //! always redacted, and contextual entropy that fires only on the value of a
@@ -193,7 +193,7 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         let (key, val) = (&caps[1], caps.get(2).unwrap());
         // A trailing `\` escapes the closing quote, as in `\"api_key\":\"…\"`.
         let text = trim_unbalanced_closers(val.as_str().trim_end_matches('\\'));
-        // Preserve diagnostic IDs even under a suspicious key (§5).
+        // Preserve diagnostic IDs even under a suspicious key.
         if ids::is_uuid(text) || is_redaction_marker(text) || is_shell_cwd(key, text) {
             continue;
         }

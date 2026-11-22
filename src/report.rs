@@ -1,4 +1,4 @@
-//! `--report` summary (§6.6): counts by type, accumulated across the run and
+//! `--report` summary: counts by type, accumulated across the run and
 //! written to stderr so it never pollutes the laundered stdout.
 
 use std::collections::BTreeMap;

@@ -1,4 +1,4 @@
-//! §9 gold acceptance cases. Each asserts the exact laundered output (and, where
+//! Gold acceptance cases. Each asserts the exact laundered output (and, where
 //! it matters, the findings) for an `(input, flags)` pair. Determinism is part
 //! of the contract: the same input always produces the same output.
 //!

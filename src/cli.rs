@@ -1,4 +1,4 @@
-//! Command-line surface (§4): wire cli → reader → engine → emitter.
+//! Command-line surface: wire cli → reader → engine → emitter.
 
 use std::fs::File;
 use std::io::{self, BufWriter, Write};

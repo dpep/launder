@@ -1,4 +1,4 @@
-//! Per-run placeholder registry (§6.4).
+//! Per-run placeholder registry.
 //!
 //! Maps each distinct `(type, value)` to a stable placeholder for the life of
 //! one run, so a repeated value reuses its number ("user X did A then B" stays
@@ -20,7 +20,7 @@ pub struct Registry {
     /// Username identities in first-seen order; index = position + 1.
     identities: Vec<String>,
     ident_index: HashMap<String, usize>,
-    /// Identities eligible for standalone-username redaction (§6.5).
+    /// Identities eligible for standalone-username redaction.
     bare_users: Vec<String>,
 }
 
@@ -75,8 +75,8 @@ impl Registry {
         format!("<USER_{index}>")
     }
 
-    /// Enroll a username for standalone (bare) redaction if it clears the guard
-    /// (§6.5): registered identity, long enough to not collide with prose.
+    /// Enroll a username for standalone (bare) redaction if it is long enough
+    /// not to collide with prose.
     pub fn enroll_bare(&mut self, user: &str) {
         const MIN_BARE_LEN: usize = 4;
         if user.len() >= MIN_BARE_LEN && !self.bare_users.iter().any(|u| u == user) {

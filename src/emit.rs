@@ -1,4 +1,4 @@
-//! Structured-output writers and the §7 secret rule.
+//! Structured-output writers and the secret rule.
 //!
 //! **Hard rule (overrides `--with-originals`):** `original` is never emitted for
 //! a secret. For non-secret types it is omitted by default and included only

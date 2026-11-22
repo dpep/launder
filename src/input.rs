@@ -1,4 +1,4 @@
-//! Streaming, line-oriented input over stdin and files (§3). One line in
+//! Streaming, line-oriented input over stdin and files. One line in
 //! flight; works on `tail -f`. Files are read in order; stdin is used when no
 //! files are given.
 
