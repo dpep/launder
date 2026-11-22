@@ -232,9 +232,6 @@ fn render(line: &str, findings: &[Finding]) -> String {
     let mut out = String::with_capacity(line.len());
     let mut prev = 0;
     for f in findings {
-        if f.byte_start < prev {
-            continue; // defensive: skip any overlap
-        }
         out.push_str(&line[prev..f.byte_start]);
         out.push_str(&f.replacement);
         prev = f.byte_end;
