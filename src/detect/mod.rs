@@ -148,7 +148,8 @@ pub enum Action {
     /// A username that a path's shape proves (`pytest-of-<u>`, a nested home)
     /// → `<USER_N>`, registering and enrolling it like a home owner.
     PathUser { user: String },
-    /// A standalone username occurrence → `<USER_N>` (identity already known).
+    /// A username outside a path → `<USER_N>`: a standalone occurrence of a
+    /// known identity, or a credential's login (`alice` in `alice:pw@host`).
     BareUser { user: String },
     /// An unnumbered secret placeholder: `<PRIVATE_KEY>`.
     FixedSecret(&'static str),

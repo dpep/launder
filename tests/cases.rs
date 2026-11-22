@@ -91,7 +91,7 @@ fn quoted_keys_are_redacted() {
     check(&[
         (
             concat!(r#"  Parameters: {"password"=>"Zq8vN2"#, r#"kLp4Rx"}"#),
-            r#"  Parameters: {"password"=>"<SECRET_1>"}"#,
+            r#"  Parameters: {"password"=>"<PASSWORD_1>"}"#,
         ),
         (
             concat!(r#"{"api_key": "Qm7Tz9Lw"#, r#"2Xc4Vb6N"}"#),
@@ -146,7 +146,7 @@ fn keyed_value_keeps_trailing_close_paren() {
             "CMD (backup.sh --token=<SECRET_1>)",
         ),
         // A paren inside the value must not split it and leak the tail.
-        ("password=Zq8)vN2kLp4Rx", "password=<SECRET_1>"),
+        ("password=Zq8)vN2kLp4Rx", "password=<PASSWORD_1>"),
     ]);
 }
 
@@ -271,7 +271,7 @@ fn json_escaped_keys_are_redacted() {
     check(&[
         (
             r#"  Parameters: {\"password\"=>\"Zq8vN2kLp4Rx\"}"#,
-            r#"  Parameters: {\"password\"=>\"<SECRET_1>\"}"#,
+            r#"  Parameters: {\"password\"=>\"<PASSWORD_1>\"}"#,
         ),
         (
             r#"{"body":"{\"api_key\":\"Qm7Tz9Lw2Xc4Vb6N\"}"}"#,
@@ -391,9 +391,9 @@ fn shell_pwd_is_a_path_not_a_password() {
         ("OLDPWD=/Users/dpep/code", "OLDPWD=~/code"),
         (
             "Server=db;Uid=sa;Pwd=Zq8vN2kLp4Rx;",
-            "Server=db;Uid=sa;Pwd=<SECRET_1>;",
+            "Server=db;Uid=sa;Pwd=<PASSWORD_1>;",
         ),
-        ("DB_PWD=Zq8vN2kLp4Rx", "DB_PWD=<SECRET_1>"),
+        ("DB_PWD=Zq8vN2kLp4Rx", "DB_PWD=<PASSWORD_1>"),
     ]);
 }
 
@@ -464,7 +464,7 @@ fn url_credential_redacts_only_the_password() {
 
 #[test]
 fn keyed_high_entropy_value_is_redacted() {
-    assert_eq!(clean("password=Z9x!q2Lm8Vt0"), "password=<SECRET_1>");
+    assert_eq!(clean("password=Z9x!q2Lm8Vt0"), "password=<PASSWORD_1>");
 }
 
 #[test]
@@ -901,15 +901,15 @@ fn quoted_keyed_value_runs_to_its_closing_quote() {
     check(&[
         (
             r#"password: "correct horse battery staple""#,
-            r#"password: "<SECRET_1>""#,
+            r#"password: "<PASSWORD_1>""#,
         ),
         (
             concat!(r#"{"password":"p@ss,wo"#, r#"rd;123","user":"bob"}"#),
-            r#"{"password":"<SECRET_1>","user":"bob"}"#,
+            r#"{"password":"<PASSWORD_1>","user":"bob"}"#,
         ),
         (
             concat!("password = 'Zx9Yw8 Vu7Ts6", "Rq5Po4Nm3'"),
-            "password = '<SECRET_1>'",
+            "password = '<PASSWORD_1>'",
         ),
         // Escaped quotes inside JSON-in-JSON close at the same escape depth.
         (
@@ -932,7 +932,7 @@ fn keyed_value_stops_at_the_next_query_parameter() {
         // An `&` not followed by `name=` belongs to the value.
         (
             concat!("password=Tr0ub4dor&3", "Zq8vN2"),
-            "password=<SECRET_1>",
+            "password=<PASSWORD_1>",
         ),
     ]);
 }
@@ -940,22 +940,22 @@ fn keyed_value_stops_at_the_next_query_parameter() {
 #[test]
 fn password_keys_redact_any_value() {
     check(&[
-        ("password=hunter2", "password=<SECRET_1>"),
-        ("password: hunter2hunter2", "password: <SECRET_1>"),
+        ("password=hunter2", "password=<PASSWORD_1>"),
+        ("password: hunter2hunter2", "password: <PASSWORD_1>"),
         (
             r#"{"password":"hunter2hunter2"}"#,
-            r#"{"password":"<SECRET_1>"}"#,
+            r#"{"password":"<PASSWORD_1>"}"#,
         ),
-        ("DB_PASSWORD=letmein1", "DB_PASSWORD=<SECRET_1>"),
-        ("PGPASSWORD=hunter2", "PGPASSWORD=<SECRET_1>"),
-        ("DB_PASS=letmein1", "DB_PASS=<SECRET_1>"),
-        ("dbPass: letmein1", "dbPass: <SECRET_1>"),
-        ("passwd=abc123", "passwd=<SECRET_1>"),
-        ("passphrase: Tr0ub4dor&3", "passphrase: <SECRET_1>"),
-        ("MYSQL_PWD=hunter2", "MYSQL_PWD=<SECRET_1>"),
+        ("DB_PASSWORD=letmein1", "DB_PASSWORD=<PASSWORD_1>"),
+        ("PGPASSWORD=hunter2", "PGPASSWORD=<PASSWORD_1>"),
+        ("DB_PASS=letmein1", "DB_PASS=<PASSWORD_1>"),
+        ("dbPass: letmein1", "dbPass: <PASSWORD_1>"),
+        ("passwd=abc123", "passwd=<PASSWORD_1>"),
+        ("passphrase: Tr0ub4dor&3", "passphrase: <PASSWORD_1>"),
+        ("MYSQL_PWD=hunter2", "MYSQL_PWD=<PASSWORD_1>"),
         (
             "Server=db;Uid=sa;Pwd=hunter2;",
-            "Server=db;Uid=sa;Pwd=<SECRET_1>;",
+            "Server=db;Uid=sa;Pwd=<PASSWORD_1>;",
         ),
     ]);
 }
@@ -1118,7 +1118,7 @@ fn url_encoded_separators_are_keyed_values() {
         ),
         (
             concat!("body: password%3dZx9Yw8Vu7Ts6", "Rq5Po4Nm3%26user%3Dbob"),
-            "body: password%3d<SECRET_1>%26user%3Dbob",
+            "body: password%3d<PASSWORD_1>%26user%3Dbob",
         ),
         (
             concat!("api_key%3AZx9Yw8Vu7Ts6", "Rq5Po4Nm3"),
@@ -1198,9 +1198,9 @@ fn space_separated_cli_flags_are_keyed_values() {
     check(&[
         (
             "mysql --password hunter2 -h db",
-            "mysql --password <SECRET_1> -h db",
+            "mysql --password <PASSWORD_1> -h db",
         ),
-        ("deploy --db-pass hunter2", "deploy --db-pass <SECRET_1>"),
+        ("deploy --db-pass hunter2", "deploy --db-pass <PASSWORD_1>"),
         (
             concat!(
                 "gh --token Zx9Yw8Vu7Ts6",
@@ -1245,7 +1245,7 @@ fn netrc_lines_redact_password_and_login() {
     check(&[
         (
             "machine api.example.com login alice password hunter2",
-            "machine api.example.com login <USER_1> password <SECRET_1>",
+            "machine api.example.com login <USER_1> password <PASSWORD_1>",
         ),
         (
             "default login anonymous password ''",
@@ -1259,7 +1259,7 @@ fn xml_credential_elements_are_redacted() {
     check(&[
         (
             "<password>hunter2</password>",
-            "<password><SECRET_1></password>",
+            "<password><PASSWORD_1></password>",
         ),
         (
             concat!("<db><apiToken>Zx9Yw8Vu7Ts6", "Rq5Po4Nm3</apiToken></db>"),
@@ -1676,5 +1676,21 @@ fn lowercase_redaction_marker_is_not_a_secret() {
         ("token=[filtered]", "token=[filtered]"),
         // Mixed letters and digits in brackets may be the secret itself.
         ("token=[a8xk2pq9]", "token=<SECRET_1>"),
+    ]);
+}
+
+#[test]
+fn one_password_gets_one_placeholder_wherever_it_appears() {
+    check(&[
+        (
+            "DB_PASSWORD=letmein1 DATABASE_URL=postgres://app:letmein1@db/x",
+            "DB_PASSWORD=<PASSWORD_1> DATABASE_URL=postgres://app:<PASSWORD_1>@db/x",
+        ),
+        (
+            "machine db.example.com login alice password letmein1",
+            "machine db.example.com login <USER_1> password <PASSWORD_1>",
+        ),
+        // Token words stay secrets.
+        ("api_key=48213377", "api_key=<SECRET_1>"),
     ]);
 }

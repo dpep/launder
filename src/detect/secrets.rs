@@ -504,12 +504,19 @@ fn keyed(
     if gated && (text.chars().count() < KEYED_MIN_LEN || is_identifier_shaped(text)) {
         return;
     }
+    // An ungated word names a password, which shares its placeholder with the
+    // same password in a URL.
+    let label = if gated {
+        Label::Secret
+    } else {
+        Label::Password
+    };
     out.push(Candidate {
         start,
         end,
         subtype: Some("keyed_entropy"),
         action: Action::Number {
-            label: Label::Secret,
+            label,
             value: text.to_string(),
         },
         rank: 20,
