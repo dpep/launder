@@ -57,19 +57,20 @@ pipeline.
 launder/
   Cargo.toml
   src/
-    main.rs        ← wire: cli → reader → engine → emitter
-    cli.rs         ← clap (derive) surface
+    main.rs        ← shim: calls cli::run
+    lib.rs         ← module list (tests drive the library)
+    cli.rs         ← clap (derive) surface + run loop: reader → engine → emitter
     config.rs      ← resolved run config + --only/--except type filter
     input.rs       ← streaming line reader over stdin/files
     engine.rs      ← per-line detect → resolve → assign → emit
     registry.rs    ← per-run placeholder registry + numbering
     detect/
-      mod.rs       ← Candidate/Kind/Action types, precedence/overlap resolution
-      paths.rs     ← pillar 1: home/user/tmpdir collapse
-      secrets.rs   ← pillar 2: prefixes, jwt, keys, url-creds, keyed entropy
+      mod.rs       ← Candidate/Kind/Action/Label types, precedence/overlap resolution
+      paths.rs     ← home/user/tmpdir collapse
+      secrets.rs   ← prefixes, jwt, keys, url-creds, keyed entropy
       net.rs       ← email, ip (private-keep), host, mac
       ids.rs       ← UUID/SHA recognizers used to PRESERVE diagnostic IDs
-    system.rs      ← local-identity signal: $USER/$HOME/hostname watchlist
+    watchlist.rs   ← local-identity signal: $USER/$HOME/hostname
     emit.rs        ← structured-output writers + the secret rule
     report.rs      ← --report summary
   tests/
