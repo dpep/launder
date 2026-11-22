@@ -106,9 +106,10 @@ fn login(user: regex::Match, out: &mut Vec<Candidate>) {
 /// (`\"token\":`). A quoted key may be followed by a comma, as in a Rails SQL
 /// bind `["token", "…"]`. Bare `key` is not a credential word: `sort_key`,
 /// `cache_key` are not secrets, and `auth` is spelled out so `author` is not.
+/// The match ends where the value begins; [`value_span`] reads the value.
 static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?i)\b([a-z0-9_\-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|master[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]))\s*\\*["']?([^\s,;"']+)"#,
+        r#"(?i)\b([a-z0-9_\-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|master[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]))\s*"#,
     )
     .unwrap()
 });
@@ -228,9 +229,9 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         return;
     }
     for caps in KEYED_VALUE.captures_iter(line) {
-        let (key, val) = (&caps[1], caps.get(2).unwrap());
-        // A trailing `\` escapes the closing quote, as in `\"api_key\":\"…\"`.
-        let text = trim_unbalanced_closers(val.as_str().trim_end_matches('\\'));
+        let key = &caps[1];
+        let (start, end) = value_span(line, caps.get(0).unwrap().end());
+        let text = &line[start..end];
         // Preserve diagnostic IDs even under a suspicious key.
         if ids::is_uuid(text) || is_redaction_marker(text) || is_shell_cwd(key, text) {
             continue;
@@ -239,8 +240,8 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
             continue;
         }
         out.push(Candidate {
-            start: val.start(),
-            end: val.start() + text.len(),
+            start,
+            end,
             subtype: Some("keyed_entropy"),
             action: Action::Number {
                 label: Label::Secret,
@@ -249,6 +250,60 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
             rank: 20,
         });
     }
+}
+
+/// The value that starts at `at`. A quoted value runs to the closing quote at
+/// the same escape depth (`"…"`, `\"…\"`), spaces and commas included; an
+/// unclosed one is read as unquoted.
+fn value_span(line: &str, at: usize) -> (usize, usize) {
+    let rest = &line[at..];
+    let escapes = rest.bytes().take_while(|&b| b == b'\\').count();
+    if let Some(q @ (b'"' | b'\'')) = rest.as_bytes().get(escapes).copied() {
+        let body = at + escapes + 1;
+        if let Some(len) = closing_quote(&line[body..], &rest[..=escapes], q) {
+            return (body, body + len);
+        }
+        return unquoted_span(line, body);
+    }
+    unquoted_span(line, at)
+}
+
+/// Offset of `close` (the opening quote with its escapes) in `body`. A bare
+/// quote must not itself be escaped.
+fn closing_quote(body: &str, close: &str, q: u8) -> Option<usize> {
+    if close.len() > 1 {
+        return body.find(close);
+    }
+    let bytes = body.as_bytes();
+    (0..bytes.len()).find(|&i| bytes[i] == q && (i == 0 || bytes[i - 1] != b'\\'))
+}
+
+/// An unquoted value: up to whitespace, `,`, `;` or a quote, and before the
+/// next query parameter (`&name=`).
+fn unquoted_span(line: &str, at: usize) -> (usize, usize) {
+    let rest = &line[at..];
+    let len = rest
+        .find(|c: char| c.is_whitespace() || matches!(c, ',' | ';' | '"' | '\''))
+        .unwrap_or(rest.len());
+    let text = &rest[..query_param_end(&rest[..len])];
+    // A trailing `\` escapes the closing quote, as in `\"api_key\":\"…\"`.
+    let text = trim_unbalanced_closers(text.trim_end_matches('\\'));
+    (at, at + text.len())
+}
+
+/// Where a value ends at a following query parameter, `&name=`. A bare `&` is
+/// part of the value.
+fn query_param_end(s: &str) -> usize {
+    s.match_indices('&')
+        .map(|(i, _)| i)
+        .find(|&i| {
+            let tail = &s[i + 1..];
+            let name = tail
+                .find(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')))
+                .unwrap_or(tail.len());
+            name > 0 && tail[name..].starts_with('=')
+        })
+        .unwrap_or(s.len())
 }
 
 /// Drop closing brackets that end the value but opened outside it, as in

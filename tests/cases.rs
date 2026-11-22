@@ -862,3 +862,44 @@ fn url_username_is_an_identity() {
         ),
     ]);
 }
+
+#[test]
+fn quoted_keyed_value_runs_to_its_closing_quote() {
+    check(&[
+        (
+            r#"password: "correct horse battery staple""#,
+            r#"password: "<SECRET_1>""#,
+        ),
+        (
+            concat!(r#"{"password":"p@ss,wo"#, r#"rd;123","user":"bob"}"#),
+            r#"{"password":"<SECRET_1>","user":"bob"}"#,
+        ),
+        (
+            concat!("password = 'Zx9Yw8 Vu7Ts6", "Rq5Po4Nm3'"),
+            "password = '<SECRET_1>'",
+        ),
+        // Escaped quotes inside JSON-in-JSON close at the same escape depth.
+        (
+            concat!(
+                r#"{"msg":"{\"api_key\":\"Zx9Yw8 Vu7Ts6"#,
+                r#"Rq5Po4Nm3\"}"}"#
+            ),
+            r#"{"msg":"{\"api_key\":\"<SECRET_1>\"}"}"#,
+        ),
+    ]);
+}
+
+#[test]
+fn keyed_value_stops_at_the_next_query_parameter() {
+    check(&[
+        (
+            concat!("GET /cb?access_token=Hk3Jd8Ws", "1Qz5Pm7R&state=xyz"),
+            "GET /cb?access_token=<SECRET_1>&state=xyz",
+        ),
+        // An `&` not followed by `name=` belongs to the value.
+        (
+            concat!("password=Tr0ub4dor&3", "Zq8vN2"),
+            "password=<SECRET_1>",
+        ),
+    ]);
+}
