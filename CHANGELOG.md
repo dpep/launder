@@ -6,7 +6,7 @@ exit codes — is the public API.
 Entries from 0.1.0 to 0.1.5 are reconstructed from tags and commit messages, so
 they summarise what shipped rather than every commit.
 
-## Unreleased
+## 0.2.0 — 2026-11-22
 
 ### Changed (breaking)
 - **JSON has a new shape.** `-j` writes
