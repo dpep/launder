@@ -90,6 +90,30 @@ fn check_exits_one_when_anything_was_scrubbed() {
 }
 
 #[test]
+fn completions_print_only_the_script() {
+    // The Homebrew formula's invocation, verbatim.
+    let (code, out, err) = run(&["--completions", "bash"], b"");
+    assert_eq!((code, err.as_str()), (0, ""));
+    assert!(out.contains("complete -F"), "{out}");
+
+    let bare = |shell: Option<&str>| {
+        let mut cmd = launder();
+        cmd.arg("--completions");
+        match shell {
+            Some(s) => cmd.env("SHELL", s),
+            None => cmd.env_remove("SHELL"),
+        };
+        cmd.output().unwrap()
+    };
+    let zsh = bare(Some("/bin/zsh"));
+    assert!(zsh.status.success());
+    assert!(String::from_utf8_lossy(&zsh.stdout).contains("compdef"));
+    let unknown = bare(None);
+    assert_eq!(unknown.status.code(), Some(2));
+    assert!(unknown.stdout.is_empty());
+}
+
+#[test]
 fn launder_watch_adds_to_watch_flags() {
     let mut child = launder()
         .env("LAUNDER_WATCH", "globex,initech")

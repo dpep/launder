@@ -15,3 +15,4 @@ memchr = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
+clap_complete = "4"

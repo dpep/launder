@@ -1,11 +1,12 @@
 //! Command-line surface: wire cli → reader → engine → emitter.
 
 use std::fs::File;
-use std::io::{self, BufWriter, Write};
+use std::io::{self, BufWriter, IsTerminal, Write};
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::{ArgGroup, Parser};
+use clap::{ArgGroup, CommandFactory, Parser};
+use clap_complete::Shell;
 
 use crate::config::{self, Config};
 use crate::emit::{Emitter, Format};
@@ -15,6 +16,13 @@ use crate::report::Report;
 use crate::watchlist::Watchlist;
 
 const AFTER_HELP: &str = "\
+Examples:
+  myapp 2>&1 | launder | pbcopy       clean trace on the clipboard
+  launder -n crash.log                preview what would change
+  launder -r -o clean.log app.log     write a copy; summary on stderr
+  launder --watch acme.com app.log    also scrub a company domain
+  git diff | launder --check -n       fail a hook, showing what it found
+
 Exit codes:
   0  success; with --check, nothing needed scrubbing
   1  --check only: something was scrubbed
@@ -80,10 +88,22 @@ struct Cli {
     /// Exit 1 if anything was scrubbed, 0 if clean (for hooks and CI).
     #[arg(long = "check")]
     check: bool,
+
+    /// Print a shell completion script (default: from $SHELL).
+    #[arg(long = "completions", value_name = "SHELL", num_args = 0..=1)]
+    completions: Option<Option<Shell>>,
 }
 
 pub fn run() -> ExitCode {
     let cli = Cli::parse();
+    if let Some(shell) = cli.completions {
+        return completions(shell);
+    }
+    // Bare `launder` at a terminal would wait forever for input.
+    if cli.files.is_empty() && io::stdin().is_terminal() {
+        let _ = Cli::command().write_help(&mut io::stderr());
+        return ExitCode::from(2);
+    }
     match execute(&cli) {
         Ok(scrubbed) if scrubbed && cli.check => ExitCode::from(1),
         Ok(_) => ExitCode::SUCCESS,
@@ -92,6 +112,16 @@ pub fn run() -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+/// Write the completion script — and nothing else — to stdout.
+fn completions(shell: Option<Shell>) -> ExitCode {
+    let Some(shell) = shell.or_else(Shell::from_env) else {
+        eprintln!("launder: can't tell your shell from $SHELL; name it: --completions zsh");
+        return ExitCode::from(2);
+    };
+    clap_complete::generate(shell, &mut Cli::command(), "launder", &mut io::stdout());
+    ExitCode::SUCCESS
 }
 
 /// Launder the input; `Ok(true)` when anything was scrubbed.
@@ -187,5 +217,48 @@ fn same_file(a: &str, b: &str) -> bool {
     match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
         (Ok(a), Ok(b)) => a == b,
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every `launder …` in the --help examples still parses.
+    #[test]
+    fn help_examples_parse() {
+        let examples = AFTER_HELP
+            .split("Examples:\n")
+            .nth(1)
+            .and_then(|s| s.split("\n\n").next())
+            .unwrap();
+        let mut seen = 0;
+        for line in examples.lines() {
+            let command = line.trim().split("  ").next().unwrap();
+            for stage in command.split('|').map(str::trim) {
+                if stage.starts_with("launder") {
+                    let args = stage.split_whitespace();
+                    if let Err(e) = Cli::try_parse_from(args) {
+                        panic!("example `{stage}` no longer parses: {e}");
+                    }
+                    seen += 1;
+                }
+            }
+        }
+        assert!(seen >= 4, "examples not found in AFTER_HELP");
+    }
+
+    #[test]
+    fn completions_carry_each_shells_marker() {
+        for (shell, marker) in [
+            (Shell::Bash, "complete -F"),
+            (Shell::Zsh, "compdef"),
+            (Shell::Fish, "complete -c"),
+        ] {
+            let mut out = Vec::new();
+            clap_complete::generate(shell, &mut Cli::command(), "launder", &mut out);
+            let script = String::from_utf8(out).unwrap();
+            assert!(script.contains(marker), "{shell}: missing {marker}");
+        }
     }
 }
