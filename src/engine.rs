@@ -150,9 +150,8 @@ impl Engine {
             Action::Home {
                 user,
                 bare_eligible,
-                tail,
-            } => format!("{}{}", self.reg.home_prefix(user, *bare_eligible), tail),
-            Action::Tmpdir { tail } => format!("<TMPDIR>{tail}"),
+            } => self.reg.home_prefix(user, *bare_eligible),
+            Action::Tmpdir => "<TMPDIR>".to_string(),
             Action::BareUser { user } => self.reg.user_placeholder(user),
             Action::FixedSecret(text) => text.to_string(),
             Action::Keep => return None,

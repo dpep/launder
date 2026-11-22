@@ -64,7 +64,7 @@ impl Candidate {
     pub fn kind(&self) -> Option<Kind> {
         match &self.action {
             Action::Number { label, .. } => Some(label.kind()),
-            Action::Home { .. } | Action::Tmpdir { .. } => Some(Kind::Path),
+            Action::Home { .. } | Action::Tmpdir => Some(Kind::Path),
             Action::BareUser { .. } => Some(Kind::User),
             Action::FixedSecret(_) => Some(Kind::Secret),
             Action::Keep => None,
@@ -75,9 +75,11 @@ impl Candidate {
     fn precedence(&self) -> u8 {
         match self.kind() {
             Some(Kind::Secret) => 100,
-            // A kept ID blocks every detector except a genuine secret.
-            None => 90,
-            Some(Kind::Path) => 70,
+            // Path spans are only personal prefixes (home, tmpdir), so they can
+            // outrank a kept ID that happens to fall on a hex-looking segment.
+            Some(Kind::Path) => 90,
+            // A kept ID blocks every other detector.
+            None => 80,
             Some(Kind::Email) => 60,
             Some(Kind::Ip) => 50,
             Some(Kind::Host) => 40,
@@ -133,15 +135,11 @@ impl Kind {
 pub enum Action {
     /// A numbered placeholder for a distinct value: `<EMAIL_1>`, `<TOKEN_2>`…
     Number { label: Label, value: String },
-    /// Home-dir collapse: register `user` as an identity, render prefix + tail.
+    /// A home-dir prefix → `~` / `<HOME_N>`, registering `user` as an identity.
     /// `bare_eligible` controls whether the username is also scrubbed standalone.
-    Home {
-        user: String,
-        bare_eligible: bool,
-        tail: String,
-    },
-    /// macOS per-user temp path → `<TMPDIR>` + tail.
-    Tmpdir { tail: String },
+    Home { user: String, bare_eligible: bool },
+    /// The macOS per-user temp dir → `<TMPDIR>`.
+    Tmpdir,
     /// A standalone username occurrence → `<USER_N>` (identity already known).
     BareUser { user: String },
     /// An unnumbered secret placeholder: `<PASSWORD>`, `<PRIVATE_KEY>`.

@@ -639,3 +639,31 @@ fn bare_username_guarded_by_length_and_boundary() {
         "~/x logged in as <USER_1> on host dpepper"
     );
 }
+
+// --- paths / network / overlap lane ---
+
+#[test]
+fn home_prefix_collapses_independently_of_tail() {
+    check(&[
+        // A digest in the tail is kept and doesn't cancel the collapse.
+        (
+            "/Users/priya/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tokio-1.35.1/src/a.rs:3:1",
+            "~/.cargo/registry/src/index.crates.io-6f17d22bba15001f/tokio-1.35.1/src/a.rs:3:1",
+        ),
+        // A secret in the tail is redacted and the owner still collapses.
+        (
+            concat!(
+                "open /Users/bob/ghp_",
+                "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789/app.rb:12"
+            ),
+            "open ~/<TOKEN_1>/app.rb:12",
+        ),
+        (
+            concat!(
+                "open /home/bob/.config/x?token=Zx9Yw8Vu",
+                "7Ts6Rq5Po4Nm3 ok"
+            ),
+            "open ~/.config/x?token=<SECRET_1> ok",
+        ),
+    ]);
+}
