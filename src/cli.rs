@@ -164,8 +164,8 @@ fn execute(cli: &Cli) -> Result<bool> {
         Format::Text
     };
 
-    let mut reader = LineReader::new(&cli.files);
-    let out = open_output(cli.output.as_deref(), &cli.files)?;
+    let mut reader = LineReader::new(&cli.files)?;
+    let out = open_output(cli.output.as_deref(), &cli.files, reader.reads_stdin())?;
     let mut emitter = Emitter::new(out, format, cfg.with_originals);
     let mut engine = Engine::new(cfg);
     let mut report = Report::new();
@@ -195,13 +195,16 @@ fn execute(cli: &Cli) -> Result<bool> {
     Ok(report.total() > 0)
 }
 
-fn open_output(path: Option<&str>, inputs: &[String]) -> Result<Box<dyn Write>> {
+fn open_output(path: Option<&str>, inputs: &[String], stdin: bool) -> Result<Box<dyn Write>> {
     match path {
         None | Some("-") => Ok(Box::new(BufWriter::new(io::stdout()))),
         Some(p) => {
             // Creating the output truncates it before the input is read.
             if let Some(input) = inputs.iter().find(|i| same_file(p, i)) {
                 anyhow::bail!("-o {p} is also an input ({input}); write somewhere else");
+            }
+            if stdin && is_stdin(p) {
+                anyhow::bail!("-o {p} is also an input (stdin); write somewhere else");
             }
             let f = File::create(p).map_err(|e| anyhow::anyhow!("writing {p}: {e}"))?;
             Ok(Box::new(BufWriter::new(f)))
@@ -217,6 +220,23 @@ fn same_file(a: &str, b: &str) -> bool {
         (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
         _ => false,
     }
+}
+
+/// Whether `path` is the file stdin is redirected from (`< path`).
+#[cfg(unix)]
+fn is_stdin(path: &str) -> bool {
+    use std::os::fd::AsFd;
+    use std::os::unix::fs::MetadataExt;
+    let stdin = io::stdin().as_fd().try_clone_to_owned().map(File::from);
+    match (std::fs::metadata(path), stdin.and_then(|f| f.metadata())) {
+        (Ok(a), Ok(b)) => a.dev() == b.dev() && a.ino() == b.ino(),
+        _ => false,
+    }
+}
+
+#[cfg(not(unix))]
+fn is_stdin(_path: &str) -> bool {
+    false
 }
 
 #[cfg(not(unix))]

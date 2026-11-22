@@ -18,19 +18,33 @@ pub enum Input {
 
 /// A source of lines: stdin or a sequence of files, read lazily.
 pub struct LineReader {
-    sources: Vec<String>,
+    sources: Vec<(String, File)>,
     current: Option<(String, BufReader<Box<dyn Read>>)>,
     use_stdin: bool,
 }
 
 impl LineReader {
-    /// Build a reader over `files`, or stdin if `files` is empty.
-    pub fn new(files: &[String]) -> Self {
-        LineReader {
-            sources: files.iter().rev().cloned().collect(),
+    /// Build a reader over `files`, or stdin if `files` is empty. Every file
+    /// is opened up front, so a missing one fails before any output is made.
+    pub fn new(files: &[String]) -> Result<Self> {
+        let sources = files
+            .iter()
+            .rev()
+            .map(|path| {
+                let f = File::open(path).with_context(|| format!("reading {path}"))?;
+                Ok((path.clone(), f))
+            })
+            .collect::<Result<_>>()?;
+        Ok(LineReader {
+            sources,
             current: None,
             use_stdin: files.is_empty(),
-        }
+        })
+    }
+
+    /// Whether any input is stdin.
+    pub fn reads_stdin(&self) -> bool {
+        self.use_stdin
     }
 
     /// True when no complete line is buffered, so the next read may block
@@ -46,8 +60,7 @@ impl LineReader {
         if self.current.is_none() {
             let (name, source): (String, Box<dyn Read>) = if std::mem::take(&mut self.use_stdin) {
                 ("stdin".into(), Box::new(io::stdin()))
-            } else if let Some(path) = self.sources.pop() {
-                let f = File::open(&path).with_context(|| format!("reading {path}"))?;
+            } else if let Some((path, f)) = self.sources.pop() {
                 (path, Box::new(f))
             } else {
                 return Ok(None);

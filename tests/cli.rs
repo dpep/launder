@@ -158,6 +158,49 @@ fn output_that_names_an_input_is_refused() {
 }
 
 #[test]
+fn output_that_is_redirected_stdin_is_refused() {
+    let dir = scratch("same-stdin");
+    let log = dir.join("app.log");
+    std::fs::write(&log, "mail ops@dpep.io\n").unwrap();
+    let out = launder()
+        .args(["-o", log.to_str().unwrap()])
+        .stdin(std::fs::File::open(&log).unwrap())
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("is also an input"));
+    assert_eq!(std::fs::read_to_string(&log).unwrap(), "mail ops@dpep.io\n");
+}
+
+#[test]
+fn inputs_are_checked_before_the_output_is_created() {
+    let dir = scratch("inputs-first");
+    let log = dir.join("app.log");
+    std::fs::write(&log, "mail ops@dpep.io\n").unwrap();
+    let out = dir.join("out.log");
+    std::fs::write(&out, "keep\n").unwrap();
+    let missing = dir.join("missing.log");
+    let (code, _, _) = run(
+        &[
+            "-o",
+            out.to_str().unwrap(),
+            log.to_str().unwrap(),
+            missing.to_str().unwrap(),
+        ],
+        b"",
+    );
+    assert_eq!(code, 2);
+    assert_eq!(std::fs::read_to_string(&out).unwrap(), "keep\n");
+
+    // An output that is also a not-yet-existing input must not read itself.
+    let fresh = dir.join("fresh.log");
+    let fresh = fresh.to_str().unwrap();
+    let (code, _, _) = run(&["-o", fresh, log.to_str().unwrap(), fresh], b"");
+    assert_eq!(code, 2);
+    assert!(!std::path::Path::new(fresh).exists());
+}
+
+#[test]
 fn private_key_split_across_files_stays_suppressed() {
     let dir = scratch("pem");
     let a = dir.join("a.log");
