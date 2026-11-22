@@ -52,3 +52,28 @@ fn ndjson_streams_before_eof() {
     let line = first_line_before_eof(&["-J"], "mail ops@dpep.io\n");
     assert!(line.contains("<EMAIL_1>"), "{line}");
 }
+
+/// Run to completion over `input`; return (exit code, stdout, stderr).
+fn run(args: &[&str], input: &[u8]) -> (i32, String, String) {
+    let mut child = launder()
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(input).unwrap();
+    let out = child.wait_with_output().unwrap();
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8(out.stdout).unwrap(),
+        String::from_utf8(out.stderr).unwrap(),
+    )
+}
+
+#[test]
+fn invalid_utf8_is_replaced_and_the_run_continues() {
+    let (code, out, _) = run(&[], b"bad \xff byte ops@dpep.io\nnext alice@dpep.io\n");
+    assert_eq!(code, 0);
+    assert_eq!(out, "bad \u{FFFD} byte <EMAIL_1>\nnext <EMAIL_2>\n");
+}

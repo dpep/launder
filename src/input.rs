@@ -57,20 +57,28 @@ impl LineReader {
             }
 
             let reader = self.current.as_mut().unwrap();
-            let mut buf = String::new();
-            let n = reader.read_line(&mut buf).context("reading input")?;
+            let mut buf = Vec::new();
+            let n = reader
+                .read_until(b'\n', &mut buf)
+                .context("reading input")?;
             if n == 0 {
                 self.current = None;
                 continue;
             }
             // Strip a single trailing \n (and \r) — restored by the caller.
-            if buf.ends_with('\n') {
+            if buf.ends_with(b"\n") {
                 buf.pop();
-                if buf.ends_with('\r') {
+                if buf.ends_with(b"\r") {
                     buf.pop();
                 }
             }
-            return Ok(Some(buf));
+            // Invalid UTF-8 becomes U+FFFD; the valid text around it is still
+            // scanned, and no raw byte of unknown meaning reaches the output.
+            let line = match String::from_utf8(buf) {
+                Ok(s) => s,
+                Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
+            };
+            return Ok(Some(line));
         }
     }
 }
