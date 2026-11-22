@@ -48,7 +48,6 @@ cargo install --path .             # or: make install
 ```sh
 launder [FILE...]            # files, or stdin if none
 launder -o/--output FILE     # write laundered text to FILE (default: stdout)
-launder --no-keep-system     # scrub OS paths too (kept by default)
 launder --all-ips            # scrub private/loopback IPs too (kept by default)
 launder --only TYPES         # comma list: path,secret,email,ip,host,mac,user
 launder --except TYPES       # run everything except these types

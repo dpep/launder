@@ -55,7 +55,6 @@ impl TypeGroup {
 #[derive(Debug, Clone)]
 pub struct Config {
     pub enabled: HashSet<TypeGroup>,
-    pub keep_system: bool,
     pub keep_private_ips: bool,
     pub with_originals: bool,
     pub system: Option<SystemInfo>,
@@ -88,7 +87,6 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             enabled: TypeGroup::ALL.into_iter().collect(),
-            keep_system: true,
             keep_private_ips: true,
             with_originals: false,
             system: None,

@@ -27,20 +27,8 @@ struct Cli {
     #[arg(short = 'o', long = "output", value_name = "FILE")]
     output: Option<String>,
 
-    /// Keep OS paths (/usr, /bin, /etc, …) — the default; hidden no-op override.
-    #[arg(long = "keep-system", overrides_with = "no_keep_system", hide = true)]
-    keep_system: bool,
-
-    /// Scrub OS paths too (kept by default).
-    #[arg(long = "no-keep-system", overrides_with = "keep_system")]
-    no_keep_system: bool,
-
-    /// Keep loopback + RFC1918 IPs — the default; hidden no-op override.
-    #[arg(long = "keep-private-ips", overrides_with = "all_ips", hide = true)]
-    keep_private_ips: bool,
-
     /// Scrub private / loopback IPs too (kept by default).
-    #[arg(long = "all-ips", overrides_with = "keep_private_ips")]
+    #[arg(long = "all-ips")]
     all_ips: bool,
 
     /// Only these types (comma list): path,secret,email,ip,host,mac,user.
@@ -93,7 +81,6 @@ fn execute(cli: &Cli) -> Result<()> {
     let enabled = Config::resolve_types(cli.only.as_deref(), cli.except.as_deref())?;
     let cfg = Config {
         enabled,
-        keep_system: !cli.no_keep_system,
         keep_private_ips: !cli.all_ips,
         with_originals: cli.with_originals,
         // Local identity ($USER / $HOME / hostname) is always used as signal —
