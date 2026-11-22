@@ -108,7 +108,13 @@ fn execute(cli: &Cli) -> Result<()> {
     let mut laundered = String::new();
     let mut all_findings: Vec<Finding> = Vec::new();
 
-    while let Some(line) = reader.next_line()? {
+    loop {
+        if reader.would_block() {
+            out.flush()?;
+        }
+        let Some(line) = reader.next_line()? else {
+            break;
+        };
         let result = engine.process_line(&line);
         report.record(&result.findings);
 

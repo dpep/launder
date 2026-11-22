@@ -3,14 +3,14 @@
 //! files are given.
 
 use std::fs::File;
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read};
 
 use anyhow::{Context, Result};
 
 /// A source of lines: stdin or a sequence of files, read lazily.
 pub struct LineReader {
     sources: Vec<Source>,
-    current: Option<Box<dyn BufRead>>,
+    current: Option<BufReader<Box<dyn Read>>>,
 }
 
 enum Source {
@@ -32,6 +32,14 @@ impl LineReader {
         }
     }
 
+    /// True when no complete line is buffered, so the next read may block
+    /// (a pipe from `tail -f`): flush pending output first.
+    pub fn would_block(&self) -> bool {
+        self.current
+            .as_ref()
+            .is_none_or(|r| memchr::memchr(b'\n', r.buffer()).is_none())
+    }
+
     /// Read the next line without its trailing newline. `Ok(None)` at EOF.
     pub fn next_line(&mut self) -> Result<Option<String>> {
         loop {
@@ -39,11 +47,11 @@ impl LineReader {
                 match self.sources.pop() {
                     None => return Ok(None),
                     Some(Source::Stdin) => {
-                        self.current = Some(Box::new(BufReader::new(io::stdin())));
+                        self.current = Some(BufReader::new(Box::new(io::stdin())));
                     }
                     Some(Source::File(path)) => {
                         let f = File::open(&path).with_context(|| format!("reading {path}"))?;
-                        self.current = Some(Box::new(BufReader::new(f)));
+                        self.current = Some(BufReader::new(Box::new(f)));
                     }
                 }
             }
