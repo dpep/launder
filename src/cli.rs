@@ -22,7 +22,7 @@ Examples:
   launder -n crash.log                preview what would change
   launder -r -o clean.log app.log     write a copy; summary on stderr
   launder --watch acme.com app.log    also scrub a company domain
-  git diff | launder --check -n       fail a hook, showing what it found
+  git diff | launder --check -r       fail a hook with a summary of what it found
 
 Exit codes:
   0  success; with --check, nothing needed scrubbing
