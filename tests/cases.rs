@@ -1530,14 +1530,14 @@ fn only_a_home_owner_takes_the_tilde() {
         "login alice by jdoe"
     );
     // Logins and path-proven users number in the same space but don't claim
-    // `~`; a login is also scrubbed where it appears alone.
+    // `~`; a login is scrubbed only where it logs in.
     assert_eq!(
         clean(input),
         concat!(
             "mongodb://<USER_1>:<PASSWORD_1>@db.example.com/prod\n",
             "~/.kube/config\n",
             "/tmp/pytest-of-<USER_3>/x <HOME_4>/y\n",
-            "login <USER_1> by <USER_2>"
+            "login alice by <USER_2>"
         )
     );
 }
@@ -1808,4 +1808,25 @@ fn text_after_a_private_key_end_marker_is_scanned() {
         .find(|f| f.subtype == Some("github"))
         .unwrap();
     assert_eq!((token.line, token.col), (3, 57));
+}
+
+#[test]
+fn a_login_is_scrubbed_only_where_it_logs_in() {
+    // A service or database login is often also a table, schema, or company
+    // name; scrubbing it everywhere mangles the rest of the log.
+    let input = concat!(
+        "DATABASE_URL=postgres://orders:s3cr3",
+        "tpw@10.0.0.5:5432/orders\n",
+        "ERROR orders: relation \"orders\" does not exist\n",
+        "curl -u northwind:Zq8vN2kL",
+        "p4Rx https://northwind-labs.com"
+    );
+    assert_eq!(
+        clean(input),
+        concat!(
+            "DATABASE_URL=postgres://<USER_1>:<PASSWORD_1>@10.0.0.5:5432/orders\n",
+            "ERROR orders: relation \"orders\" does not exist\n",
+            "curl -u <USER_2>:<PASSWORD_2> https://northwind-labs.com"
+        )
+    );
 }

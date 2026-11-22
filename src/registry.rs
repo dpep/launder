@@ -72,7 +72,7 @@ impl Registry {
         }
     }
 
-    /// Register a username a path or login proves and return its `<USER_N>`,
+    /// Register a username a path proves and return its `<USER_N>`,
     /// enrolling it for standalone redaction like a home owner.
     pub fn proven_user(&mut self, user: &str) -> String {
         self.enroll_bare(user);

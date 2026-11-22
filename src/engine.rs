@@ -204,7 +204,10 @@ impl Engine {
                 bare_eligible,
             } => self.reg.home_prefix(user, *bare_eligible),
             Action::Tmpdir => "<TMPDIR>".to_string(),
-            Action::PathUser { user } | Action::BareUser { user } => self.reg.proven_user(user),
+            Action::PathUser { user } => self.reg.proven_user(user),
+            // A login (often also a service or table name) scrubs only at its
+            // own site; a bare match is of an already-enrolled name.
+            Action::BareUser { user } => self.reg.user_placeholder(user),
             Action::FixedSecret(text) => text.to_string(),
             Action::Keep => return None,
         };
