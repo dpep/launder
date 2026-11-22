@@ -280,11 +280,17 @@ impl Engine {
         out
     }
 
-    /// Spans of `--keep` terms, which nothing but a secret may replace.
+    /// Spans of `--keep` terms, which nothing but a secret may replace. Only
+    /// the term itself: a domain's span would otherwise grow over subdomains.
     fn kept_spans(&self, lower: &str) -> Vec<(usize, usize)> {
         self.keep
             .iter()
-            .flat_map(|t| t.spans(lower.as_bytes()))
+            .flat_map(|t| {
+                let width = t.width();
+                t.spans(lower.as_bytes())
+                    .into_iter()
+                    .map(move |(_, e)| (e - width, e))
+            })
             .collect()
     }
 

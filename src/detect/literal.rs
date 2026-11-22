@@ -90,13 +90,18 @@ impl Term {
         Term::new(term, boundary)
     }
 
+    /// The term's length in bytes.
+    pub fn width(&self) -> usize {
+        self.finder.needle().len()
+    }
+
     pub fn is_domain(&self) -> bool {
         self.boundary == Boundary::Domain
     }
 
     /// Byte spans of each match in `lower`, the [`fold`]ed line.
     pub fn spans(&self, lower: &[u8]) -> Vec<(usize, usize)> {
-        let len = self.finder.needle().len();
+        let len = self.width();
         let mut out = Vec::new();
         for start in self.finder.find_iter(lower) {
             let end = start + len;

@@ -1522,6 +1522,20 @@ fn keep_leaves_the_term_alone_but_not_what_contains_it() {
 }
 
 #[test]
+fn keep_does_not_spare_a_watched_subdomain() {
+    check_with(
+        || with_terms(&["acme-corp.com"], &["acme-corp.com"]),
+        &[
+            (
+                "acme-corp.com via api.acme-corp.com",
+                "acme-corp.com via <HOST_1>",
+            ),
+            ("mail ops@acme-corp.com", "mail <EMAIL_1>"),
+        ],
+    );
+}
+
+#[test]
 fn keep_never_unredacts_a_secret() {
     let raw = concat!("Zq8vN2kL", "p4RxQm7T");
     let out = launder(with_terms(&[], &[raw]), &format!("password={raw}")).0;

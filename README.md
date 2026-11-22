@@ -147,7 +147,7 @@ To make them stick, set `LAUNDER_WATCH` in your shell rc. It takes the same comm
 export LAUNDER_WATCH="acme-corp.com hooli"
 ```
 
-The opposite is `--keep`: never scrub a term, such as a public host you want readers to see. A wider match that contains it is still scrubbed (`ops@acme-corp.com` under `--keep acme-corp.com`), and a secret is always scrubbed.
+The opposite is `--keep`: never scrub a term, such as a public host you want readers to see. A wider match that contains it is still scrubbed (under `--keep acme-corp.com`, `ops@acme-corp.com`, or a watched `api.acme-corp.com`), and a secret is always scrubbed.
 
 ## Usage
 
