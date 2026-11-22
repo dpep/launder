@@ -66,12 +66,7 @@ struct Cli {
     check: bool,
 
     /// Also scrub TERM, any case; a domain takes its subdomains (also $LAUNDER_WATCH).
-    #[arg(
-        long = "watch",
-        value_name = "TERM",
-        value_delimiter = ',',
-        help_heading = "Scrubbing"
-    )]
+    #[arg(long = "watch", value_name = "TERM", help_heading = "Scrubbing")]
     watch: Vec<String>,
 
     /// Never scrub TERM, e.g. a public host. Secrets are scrubbed regardless.
@@ -145,13 +140,7 @@ fn execute(cli: &Cli) -> Result<bool> {
         // Local identity ($USER / $HOME / hostname) is always used as signal —
         // a watchlist of known-identifying tokens, never pinned. Offline.
         watchlist: Watchlist::from_env(),
-        // Terms set once in a shell rc add to those on the command line.
-        watch: std::env::var("LAUNDER_WATCH")
-            .unwrap_or_default()
-            .split(',')
-            .map(str::to_string)
-            .chain(cli.watch.iter().cloned())
-            .collect(),
+        watch: watch_terms(cli)?,
         keep: cli.keep.clone(),
     };
     let format = if cli.dry_run {
@@ -193,6 +182,29 @@ fn execute(cli: &Cli) -> Result<bool> {
         eprintln!("{}", report.render());
     }
     Ok(report.total() > 0)
+}
+
+/// `$LAUNDER_WATCH` (set once in a shell rc) plus the `--watch` values, each
+/// split on commas and whitespace.
+fn watch_terms(cli: &Cli) -> Result<Vec<String>> {
+    let split = |s: &str| -> Vec<String> {
+        s.split(|c: char| c == ',' || c.is_whitespace())
+            .filter(|t| !t.is_empty())
+            .map(str::to_string)
+            .collect()
+    };
+    let mut terms = split(&std::env::var("LAUNDER_WATCH").unwrap_or_default());
+    for value in &cli.watch {
+        let found = split(value);
+        if found.is_empty() {
+            anyhow::bail!("--watch {value:?} names no term");
+        }
+        terms.extend(found);
+    }
+    if let Some(t) = terms.iter().find(|t| !t.chars().any(char::is_alphanumeric)) {
+        anyhow::bail!("--watch {t:?} has nothing to match; name a word or domain");
+    }
+    Ok(terms)
 }
 
 fn open_output(path: Option<&str>, inputs: &[String], stdin: bool) -> Result<Box<dyn Write>> {

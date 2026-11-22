@@ -231,3 +231,37 @@ fn unterminated_private_key_is_reported_at_end_of_input() {
         "launder: unterminated private key; 2 lines suppressed to the end of input\n"
     );
 }
+
+#[test]
+fn watch_terms_split_on_commas_and_whitespace() {
+    let mut cmd = launder();
+    cmd.env("LAUNDER_WATCH", "globex initech")
+        .args(["--watch", "acme, hooli"]);
+    let out = cmd
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(b"acme hooli globex initech\n")?;
+            child.wait_with_output()
+        })
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "<TERM_1> <TERM_2> <TERM_3> <TERM_4>\n"
+    );
+}
+
+#[test]
+fn a_watch_term_with_nothing_to_match_is_an_error() {
+    for term in [".", "", " ", ","] {
+        let (code, out, err) = run(&["--watch", term], b"a.b\n");
+        assert_eq!(code, 2, "--watch {term:?}");
+        assert!(out.is_empty(), "--watch {term:?}: {out}");
+        assert!(err.contains("--watch"), "--watch {term:?}: {err}");
+    }
+}
