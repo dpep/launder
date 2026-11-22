@@ -1433,3 +1433,89 @@ fn ndjson_text_reconstructs_the_laundered_output() {
         .collect();
     assert_eq!(text.join("\n") + "\n", emit(Format::Text, false, input));
 }
+
+fn with_terms(watch: &[&str], keep: &[&str]) -> Config {
+    Config {
+        watch: watch.iter().map(|s| s.to_string()).collect(),
+        keep: keep.iter().map(|s| s.to_string()).collect(),
+        ..Config::default()
+    }
+}
+
+/// Like [`check`], under one config (a fresh engine per row).
+fn check_with(cfg: impl Fn() -> Config, rows: &[(&str, &str)]) {
+    let failures: Vec<String> = rows
+        .iter()
+        .filter_map(|&(input, expected)| {
+            let got = launder(cfg(), input).0;
+            (got != expected).then(|| {
+                format!("  input:    {input:?}\n  expected: {expected:?}\n  got:      {got:?}")
+            })
+        })
+        .collect();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn watch_scrubs_terms_and_whole_domains() {
+    check_with(
+        || with_terms(&["acme-corp.com", "Globex"], &[]),
+        &[
+            // A domain term takes its subdomains with it, in any case.
+            (
+                "deploy acme-corp.com, api.acme-corp.com and web-03.prod.ACME-CORP.com.",
+                "deploy <HOST_1>, <HOST_2> and <HOST_3>.",
+            ),
+            ("https://api.acme-corp.com/v1", "https://<HOST_1>/v1"),
+            ("ops@acme-corp.com", "<EMAIL_1>"),
+            // Not a label boundary: a different domain.
+            (
+                "acme-corp.com.au notacme-corp.com",
+                "acme-corp.com.au notacme-corp.com",
+            ),
+            // Other terms match whole words, in any case.
+            (
+                "GLOBEX billing: globex_api myglobex globex-eu",
+                "<TERM_1> billing: globex_api myglobex <TERM_1>-eu",
+            ),
+        ],
+    );
+}
+
+#[test]
+fn watch_terms_answer_to_only_and_except() {
+    let cfg = Config {
+        enabled: Config::resolve_types(None, Some("term")).unwrap(),
+        ..with_terms(&["globex"], &[])
+    };
+    assert_eq!(launder(cfg, "globex").0, "globex");
+}
+
+#[test]
+fn keep_leaves_the_term_alone_but_not_what_contains_it() {
+    check_with(
+        || with_terms(&[], &["8.8.8.8", "build.corp", "dpep"]),
+        &[
+            ("ip=8.8.8.8 from 8.8.4.4", "ip=8.8.8.8 from <IP_1>"),
+            ("ssh build.corp", "ssh build.corp"),
+            ("mail ops@build.corp", "mail <EMAIL_1>"),
+            ("by dpep in /Users/dpep/x", "by dpep in ~/x"),
+        ],
+    );
+}
+
+#[test]
+fn keep_never_unredacts_a_secret() {
+    let raw = concat!("Zq8vN2kL", "p4RxQm7T");
+    let out = launder(with_terms(&[], &[raw]), &format!("password={raw}")).0;
+    assert!(!out.contains(raw), "{out}");
+}
+
+#[test]
+fn watchlist_matches_any_case() {
+    let cfg = with_watchlist(&["zedd"], None, &["zedd-mbp"]);
+    assert_eq!(
+        launder(cfg, "User ZEDD logged in on Zedd-MBP").0,
+        "User <USER_1> logged in on <HOST_1>"
+    );
+}

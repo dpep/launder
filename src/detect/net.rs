@@ -9,6 +9,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+use super::literal::Term;
 use super::{Action, Candidate, Label};
 
 /// The local part may carry percent-escapes (`%6Aane`), and the `@` may be
@@ -102,7 +103,9 @@ pub fn mac(line: &str, out: &mut Vec<Candidate>) {
     }
 }
 
-pub fn host(line: &str, extra: &[String], out: &mut Vec<Candidate>) {
+/// Internal hostnames, plus the machine's own names (`machine`) matched in
+/// `lower`, the ASCII-lowercased line.
+pub fn host(line: &str, lower: &str, machine: &[Term], out: &mut Vec<Candidate>) {
     for m in DOTTED_NAME.find_iter(line) {
         // `.env.local` is a dotfile, not a host.
         if line[..m.start()].ends_with('.') || !is_internal(m.as_str()) {
@@ -110,19 +113,9 @@ pub fn host(line: &str, extra: &[String], out: &mut Vec<Candidate>) {
         }
         out.push(host_candidate(m.start(), m.end(), m.as_str(), "internal"));
     }
-    // The machine's own hostname (from the watchlist), matched verbatim.
-    for name in extra {
-        if name.is_empty() {
-            continue;
-        }
-        let mut from = 0;
-        while let Some(rel) = memchr::memmem::find(&line.as_bytes()[from..], name.as_bytes()) {
-            let start = from + rel;
-            let end = start + name.len();
-            if is_token_boundary(line, start, end) {
-                out.push(host_candidate(start, end, name, "machine"));
-            }
-            from = end;
+    for name in machine {
+        for (start, end) in name.spans(lower.as_bytes()) {
+            out.push(host_candidate(start, end, &lower[start..end], "machine"));
         }
     }
 }
@@ -236,14 +229,4 @@ fn is_private_v6(a: Ipv6Addr) -> bool {
     a.is_loopback()
         || first & 0xffc0 == 0xfe80 // link-local fe80::/10
         || first & 0xfe00 == 0xfc00 // unique-local fc00::/7
-}
-
-fn is_token_boundary(line: &str, start: usize, end: usize) -> bool {
-    let before = line[..start].chars().next_back();
-    let after = line[end..].chars().next();
-    let ok = |c: Option<char>| match c {
-        None => true,
-        Some(c) => !(c.is_alphanumeric() || c == '-' || c == '.'),
-    };
-    ok(before) && ok(after)
 }

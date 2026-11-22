@@ -62,6 +62,14 @@ struct Cli {
     /// Add each finding's original text to JSON (never for secrets).
     #[arg(long = "with-originals", requires = "structured")]
     with_originals: bool,
+
+    /// Also scrub TERM, any case; a domain takes its subdomains (also $LAUNDER_WATCH).
+    #[arg(long = "watch", value_name = "TERM", value_delimiter = ',')]
+    watch: Vec<String>,
+
+    /// Never scrub TERM (a false positive). Secrets are always scrubbed.
+    #[arg(long = "keep", value_name = "TERM", value_delimiter = ',')]
+    keep: Vec<String>,
 }
 
 pub fn run() -> ExitCode {
@@ -84,6 +92,14 @@ fn execute(cli: &Cli) -> Result<()> {
         // Local identity ($USER / $HOME / hostname) is always used as signal —
         // a watchlist of known-identifying tokens, never pinned. Offline.
         watchlist: Watchlist::from_env(),
+        // Terms set once in a shell rc add to those on the command line.
+        watch: std::env::var("LAUNDER_WATCH")
+            .unwrap_or_default()
+            .split(',')
+            .map(str::to_string)
+            .chain(cli.watch.iter().cloned())
+            .collect(),
+        keep: cli.keep.clone(),
     };
     let format = if cli.dry_run {
         Format::Preview

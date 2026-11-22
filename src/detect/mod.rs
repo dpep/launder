@@ -10,6 +10,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 
 pub mod ids;
+pub mod literal;
 pub mod net;
 pub mod paths;
 pub mod secrets;
@@ -84,6 +85,7 @@ impl Candidate {
             Some(Kind::Ip) => 50,
             Some(Kind::Host) => 40,
             Some(Kind::Mac) => 30,
+            Some(Kind::Term) => 20,
             Some(Kind::User) => 10,
         }
     }
@@ -99,10 +101,11 @@ pub enum Kind {
     Host,
     Mac,
     User,
+    Term,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 7] = [
+    pub const ALL: [Kind; 8] = [
         Kind::Path,
         Kind::Secret,
         Kind::Email,
@@ -110,6 +113,7 @@ impl Kind {
         Kind::Host,
         Kind::Mac,
         Kind::User,
+        Kind::Term,
     ];
 
     pub fn as_str(self) -> &'static str {
@@ -121,6 +125,7 @@ impl Kind {
             Kind::Host => "host",
             Kind::Mac => "mac",
             Kind::User => "user",
+            Kind::Term => "term",
         }
     }
 
@@ -162,6 +167,8 @@ pub enum Label {
     Ip,
     Host,
     Mac,
+    /// A `--watch` term that is not a domain.
+    Term,
 }
 
 impl Label {
@@ -175,6 +182,7 @@ impl Label {
             Label::Ip => "IP",
             Label::Host => "HOST",
             Label::Mac => "MAC",
+            Label::Term => "TERM",
         }
     }
 
@@ -185,6 +193,7 @@ impl Label {
             Label::Ip => Kind::Ip,
             Label::Host => Kind::Host,
             Label::Mac => Kind::Mac,
+            Label::Term => Kind::Term,
         }
     }
 }

@@ -6,6 +6,7 @@
 //! so `user=<name>` on the same line still maps.
 
 use crate::config::Config;
+use crate::detect::literal::{Boundary, Term};
 use crate::detect::{self, Action, Candidate, Kind, resolve};
 use crate::registry::Registry;
 
@@ -43,6 +44,12 @@ pub struct Engine {
     open_key: Option<usize>,
     /// Literal `$HOME` prefix and its owner, for collapsing non-standard homes.
     home: Option<(String, String)>,
+    /// The machine's own hostnames.
+    machine: Vec<Term>,
+    watch: Vec<Term>,
+    keep: Vec<Term>,
+    /// Searchers for the registry's bare usernames, in the same order.
+    bare: Vec<Term>,
 }
 
 impl Engine {
@@ -58,7 +65,14 @@ impl Engine {
             let owner = h.rsplit(['/', '\\']).next().filter(|s| !s.is_empty())?;
             Some((h.clone(), owner.to_string()))
         });
+        let terms = |list: &[String], make: fn(&str) -> Option<Term>| {
+            list.iter().filter_map(|t| make(t)).collect::<Vec<_>>()
+        };
         Engine {
+            machine: terms(&cfg.watchlist.hostnames, |t| Term::new(t, Boundary::Host)),
+            watch: terms(&cfg.watch, Term::user),
+            keep: terms(&cfg.keep, Term::user),
+            bare: Vec::new(),
             reg,
             cfg,
             line_no: 0,
@@ -81,6 +95,8 @@ impl Engine {
         // Detectors read the escape-blanked view; replacements index `line`.
         let view = detect::detection_view(line);
         let text = view.as_ref();
+        // Literal terms match case-insensitively; ASCII lowering keeps offsets.
+        let lower = text.to_ascii_lowercase();
         let mut candidates = Vec::new();
         if secrets_on && let Some((start, end, continues)) = detect::secrets::private_key(text) {
             self.open_key = continues.then_some(0);
@@ -116,12 +132,22 @@ impl Engine {
             detect::net::ip(text, self.cfg.keep_private_ips, &mut candidates);
         }
         if self.cfg.enabled(Kind::Host) {
-            detect::net::host(text, &self.cfg.watchlist.hostnames, &mut candidates);
+            detect::net::host(text, &lower, &self.machine, &mut candidates);
         }
         if self.cfg.enabled(Kind::Mac) {
             detect::net::mac(text, &mut candidates);
         }
 
+        detect::literal::watch(
+            &self.watch,
+            &lower,
+            self.cfg.enabled(Kind::Host),
+            self.cfg.enabled(Kind::Term),
+            &mut candidates,
+        );
+
+        let kept = self.kept_spans(&lower);
+        candidates.retain(|c| !is_kept(c, &kept));
         let resolved = resolve(candidates);
         let covered: Vec<(usize, usize)> = resolved.iter().map(|c| (c.start, c.end)).collect();
 
@@ -134,7 +160,8 @@ impl Engine {
 
         // Phase B: standalone usernames, over regions nothing else claimed.
         if self.cfg.enabled(Kind::User) {
-            let bare = self.detect_bare_users(text, &covered);
+            let mut bare = self.detect_bare_users(&lower, &covered);
+            bare.retain(|c| !is_kept(c, &kept));
             for c in resolve(bare) {
                 findings.extend(self.assign(line, &c));
             }
@@ -209,10 +236,16 @@ impl Engine {
 
     /// Find standalone occurrences of registered usernames outside `covered`
     /// (resolved spans, sorted by start).
-    fn detect_bare_users(&self, line: &str, covered: &[(usize, usize)]) -> Vec<Candidate> {
+    fn detect_bare_users(&mut self, lower: &str, covered: &[(usize, usize)]) -> Vec<Candidate> {
+        // The registry only appends, so build searchers for the new names.
+        let users = self.reg.bare_users();
+        for user in &users[self.bare.len()..] {
+            self.bare
+                .push(Term::new(user, Boundary::Word).expect("enrolled names are non-empty"));
+        }
         let mut out = Vec::new();
-        for user in self.reg.bare_users() {
-            for (start, end) in bare_occurrences(line, user) {
+        for (user, term) in users.iter().zip(&self.bare) {
+            for (start, end) in term.spans(lower.as_bytes()) {
                 // `covered` is sorted and disjoint: only the last span starting
                 // before `end` can overlap.
                 let i = covered.partition_point(|&(s, _)| s < end);
@@ -229,6 +262,14 @@ impl Engine {
             }
         }
         out
+    }
+
+    /// Spans of `--keep` terms, which nothing but a secret may replace.
+    fn kept_spans(&self, lower: &str) -> Vec<(usize, usize)> {
+        self.keep
+            .iter()
+            .flat_map(|t| t.spans(lower.as_bytes()))
+            .collect()
     }
 
     fn continue_private_key(&mut self, line: &str) -> LineResult {
@@ -285,28 +326,10 @@ fn render(line: &str, findings: &[Finding]) -> String {
     out
 }
 
-/// Standalone occurrences of `user`: word-boundary delimited, where a word char
-/// is alphanumeric or underscore.
-fn bare_occurrences(line: &str, user: &str) -> Vec<(usize, usize)> {
-    let mut out = Vec::new();
-    if user.is_empty() {
-        return out;
-    }
-    let bytes = line.as_bytes();
-    let mut from = 0;
-    while let Some(rel) = memchr::memmem::find(&bytes[from..], user.as_bytes()) {
-        let start = from + rel;
-        let end = start + user.len();
-        let before_ok = start == 0 || !is_word_byte(bytes[start - 1]);
-        let after_ok = end >= bytes.len() || !is_word_byte(bytes[end]);
-        if before_ok && after_ok {
-            out.push((start, end));
-        }
-        from = end;
-    }
-    out
-}
-
-fn is_word_byte(b: u8) -> bool {
-    b.is_ascii_alphanumeric() || b == b'_'
+/// A scrub that lies within a `--keep` span. A secret is never kept, and a
+/// wider match that merely contains the term (an email at a kept domain) is
+/// still scrubbed.
+fn is_kept(c: &Candidate, kept: &[(usize, usize)]) -> bool {
+    c.kind().is_some_and(|k| !k.is_secret())
+        && kept.iter().any(|&(s, e)| s <= c.start && c.end <= e)
 }

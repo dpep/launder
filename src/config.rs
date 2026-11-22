@@ -14,6 +14,10 @@ pub struct Config {
     pub keep_private_ips: bool,
     pub with_originals: bool,
     pub watchlist: Watchlist,
+    /// `--watch` terms: scrubbed on sight.
+    pub watch: Vec<String>,
+    /// `--keep` terms: never scrubbed, unless a secret.
+    pub keep: Vec<String>,
 }
 
 impl Config {
@@ -46,6 +50,8 @@ impl Default for Config {
             keep_private_ips: true,
             with_originals: false,
             watchlist: Watchlist::default(),
+            watch: Vec::new(),
+            keep: Vec::new(),
         }
     }
 }

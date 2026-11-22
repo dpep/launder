@@ -78,6 +78,28 @@ fn invalid_utf8_is_replaced_and_the_run_continues() {
     assert_eq!(out, "bad \u{FFFD} byte <EMAIL_1>\nnext <EMAIL_2>\n");
 }
 
+#[test]
+fn launder_watch_adds_to_watch_flags() {
+    let mut child = launder()
+        .env("LAUNDER_WATCH", "globex,initech")
+        .args(["--watch", "acme"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"acme globex initech\n")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert_eq!(
+        String::from_utf8(out.stdout).unwrap(),
+        "<TERM_1> <TERM_2> <TERM_3>\n"
+    );
+}
+
 /// A fresh scratch directory under the system temp dir, unique per test.
 fn scratch(name: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("launder-cli-{}-{name}", std::process::id()));
