@@ -109,7 +109,7 @@ fn login(user: regex::Match, out: &mut Vec<Candidate>) {
 /// The match ends where the value begins; [`value_span`] reads the value.
 static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?i)\b([a-z0-9_\-]*(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|master[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]))\s*"#,
+        r#"(?i)\b(([a-z0-9_\-]*)(password|passwd|passphrase|pass|pwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key|master[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]))\s*"#,
     )
     .unwrap()
 });
@@ -230,13 +230,18 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
     }
     for caps in KEYED_VALUE.captures_iter(line) {
         let key = &caps[1];
+        let Some(gated) = entropy_gated(&caps[2], &caps[3]) else {
+            continue;
+        };
         let (start, end) = value_span(line, caps.get(0).unwrap().end());
         let text = &line[start..end];
         // Preserve diagnostic IDs even under a suspicious key.
-        if ids::is_uuid(text) || is_redaction_marker(text) || is_shell_cwd(key, text) {
+        if ids::is_uuid(text) || is_placeholder_value(text) || is_shell_cwd(key, text) {
             continue;
         }
-        if text.chars().count() < KEYED_MIN_LEN || shannon_entropy(text) < KEYED_MIN_ENTROPY {
+        if gated
+            && (text.chars().count() < KEYED_MIN_LEN || shannon_entropy(text) < KEYED_MIN_ENTROPY)
+        {
             continue;
         }
         out.push(Candidate {
@@ -250,6 +255,36 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
             rank: 20,
         });
     }
+}
+
+/// Whether a keyed value needs the entropy gate, by the key's credential
+/// word: a password is redacted whatever it looks like, but `token`, `secret`
+/// and `key` also name non-secrets (`token_type=bearer`). `None`: not a key.
+fn entropy_gated(prefix: &str, word: &str) -> Option<bool> {
+    let separated = prefix.is_empty()
+        || prefix.ends_with(['_', '-'])
+        || (prefix.ends_with(|c: char| c.is_ascii_lowercase())
+            && word.starts_with(|c: char| c.is_ascii_uppercase()));
+    match word.to_ascii_lowercase().as_str() {
+        "password" | "passwd" | "passphrase" => Some(false),
+        // A bare `pass` is as often a test tally (`pass: 12`); `bypass` is no key.
+        "pass" if prefix.is_empty() => Some(true),
+        "pass" => separated.then_some(false),
+        // `OLDPWD` is the shell's, not a password.
+        "pwd" => Some(!separated),
+        _ => Some(true),
+    }
+}
+
+/// A value that stands in for a secret rather than being one: empty, a
+/// boolean or null, a mask of `*`, or a redaction marker.
+fn is_placeholder_value(s: &str) -> bool {
+    s.is_empty()
+        || ["true", "false", "null", "nil", "none"]
+            .iter()
+            .any(|w| s.eq_ignore_ascii_case(w))
+        || s.bytes().all(|b| b == b'*')
+        || is_redaction_marker(s)
 }
 
 /// The value that starts at `at`. A quoted value runs to the closing quote at

@@ -903,3 +903,57 @@ fn keyed_value_stops_at_the_next_query_parameter() {
         ),
     ]);
 }
+
+#[test]
+fn password_keys_redact_any_value() {
+    check(&[
+        ("password=hunter2", "password=<SECRET_1>"),
+        ("password: hunter2hunter2", "password: <SECRET_1>"),
+        (
+            r#"{"password":"hunter2hunter2"}"#,
+            r#"{"password":"<SECRET_1>"}"#,
+        ),
+        ("DB_PASSWORD=letmein1", "DB_PASSWORD=<SECRET_1>"),
+        ("PGPASSWORD=hunter2", "PGPASSWORD=<SECRET_1>"),
+        ("DB_PASS=letmein1", "DB_PASS=<SECRET_1>"),
+        ("dbPass: letmein1", "dbPass: <SECRET_1>"),
+        ("passwd=abc123", "passwd=<SECRET_1>"),
+        ("passphrase: Tr0ub4dor&3", "passphrase: <SECRET_1>"),
+        ("MYSQL_PWD=hunter2", "MYSQL_PWD=<SECRET_1>"),
+        (
+            "Server=db;Uid=sa;Pwd=hunter2;",
+            "Server=db;Uid=sa;Pwd=<SECRET_1>;",
+        ),
+    ]);
+}
+
+#[test]
+fn password_keys_keep_placeholder_values() {
+    check(&[
+        ("password=", "password="),
+        (r#"{"password":""}"#, r#"{"password":""}"#),
+        ("password: true", "password: true"),
+        ("password=False", "password=False"),
+        ("password: null", "password: null"),
+        ("password=None", "password=None"),
+        ("password: nil", "password: nil"),
+        ("password=********", "password=********"),
+        ("PWD=/srv/app", "PWD=/srv/app"),
+    ]);
+}
+
+#[test]
+fn ambiguous_pass_words_keep_the_entropy_gate() {
+    check(&[
+        // A bare `pass` is as often a test tally as a password.
+        ("pass: 42 fail: 0", "pass: 42 fail: 0"),
+        ("pass=12", "pass=12"),
+        (concat!("pass=Hk3Jd8Ws", "1Qz5Pm7R"), "pass=<SECRET_1>"),
+        // `pass` inside a word is no key at all.
+        (
+            "bypass=enabled compass=northwest",
+            "bypass=enabled compass=northwest",
+        ),
+        ("token_type=bearer", "token_type=bearer"),
+    ]);
+}
