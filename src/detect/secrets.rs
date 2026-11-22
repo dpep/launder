@@ -64,8 +64,41 @@ static AUTH_HEADER: LazyLock<Regex> = LazyLock::new(|| {
 /// user may be empty, as in `redis://:pass@host`. The password runs to the
 /// last `@` of the authority, so an unencoded `@` in it can't leak its tail.
 static URL_CREDENTIAL: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"[a-zA-Z][a-zA-Z0-9+.\-]*://[^:/@\s'"]*:([^/?#\s'"]+)@"#).unwrap()
+    Regex::new(r#"[a-zA-Z][a-zA-Z0-9+.\-]*://([^:/@\s'"]*):([^/?#\s'"]+)@"#).unwrap()
 });
+
+/// Login names that name a role, not a person: kept, since they identify no one.
+const ROLE_USERS: [&str; 11] = [
+    "postgres",
+    "root",
+    "admin",
+    "user",
+    "guest",
+    "anonymous",
+    "default",
+    "token",
+    "oauth2",
+    "x-access-token",
+    "x-oauth-basic",
+];
+
+/// A credential's login as an identity → `<USER_N>`. Short names share the
+/// bare-username floor: too generic (`sa`, `app`, `git`) to identify anyone.
+fn login(user: regex::Match, out: &mut Vec<Candidate>) {
+    let name = user.as_str();
+    if name.len() < 4 || ROLE_USERS.iter().any(|r| name.eq_ignore_ascii_case(r)) {
+        return;
+    }
+    out.push(Candidate {
+        start: user.start(),
+        end: user.end(),
+        subtype: Some("url_user"),
+        action: Action::BareUser {
+            user: name.to_string(),
+        },
+        rank: 0,
+    });
+}
 
 /// A suspicious key whose value should be entropy-checked (contextual scan).
 /// The key may carry a prefix (`access_token`, `refreshToken`, `SECRET_KEY_BASE`)
@@ -177,7 +210,8 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
     }
 
     for caps in URL_CREDENTIAL.captures_iter(line) {
-        let pass = caps.get(1).unwrap();
+        login(caps.get(1).unwrap(), out);
+        let pass = caps.get(2).unwrap();
         out.push(Candidate {
             start: pass.start(),
             end: pass.end(),

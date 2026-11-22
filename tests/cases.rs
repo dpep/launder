@@ -843,3 +843,22 @@ fn url_passwords_are_numbered_per_value() {
         ),
     )]);
 }
+
+#[test]
+fn url_username_is_an_identity() {
+    check(&[
+        (
+            concat!("https://alice:Zq8vN2", "kLp4Rx@git.example.com/org/repo"),
+            "https://<USER_1>:<PASSWORD_1>@git.example.com/org/repo",
+        ),
+        // Role accounts and very short names identify no one.
+        (
+            concat!("postgres://postgres:Zq8vN2", "kLp4Rx@db1.example.com/app"),
+            "postgres://postgres:<PASSWORD_1>@db1.example.com/app",
+        ),
+        (
+            concat!("amqp://sa:Zq8vN2", "kLp4Rx@mq.example.com"),
+            "amqp://sa:<PASSWORD_1>@mq.example.com",
+        ),
+    ]);
+}
