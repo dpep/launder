@@ -1626,3 +1626,42 @@ fn longer_dotted_number_run_is_not_an_ip() {
         ("range 203.0.113.9-203.0.113.20", "range <IP_1>-<IP_2>"),
     ]);
 }
+
+#[test]
+fn short_keyed_secret_is_redacted_unless_it_reads_as_a_name() {
+    check(&[
+        ("token=7f3a9c1a", "token=<SECRET_1>"),
+        ("api_key=48213377", "api_key=<SECRET_1>"),
+        ("secret=a8Xk2pQ9", "secret=<SECRET_1>"),
+        // A git SHA under a credential key is still a credential.
+        (
+            "token=95f2a31c4e8b2d1f0a9e8d7c6b5a4f3e2d1c0b9a",
+            "token=<SECRET_1>",
+        ),
+        // Names, references and markers stay readable.
+        ("secret=my_secret_name", "secret=my_secret_name"),
+        ("secret_name=prod-db-creds", "secret_name=prod-db-creds"),
+        ("token=REDACTED", "token=REDACTED"),
+        ("token=GITHUB_TOKEN", "token=GITHUB_TOKEN"),
+        (
+            "token_provider=TokenProvider",
+            "token_provider=TokenProvider",
+        ),
+        ("token=${GITHUB_TOKEN}", "token=${GITHUB_TOKEN}"),
+        ("secret=/run/secrets/db", "secret=/run/secrets/db"),
+        // A long number in a word, or a URL, can carry the secret.
+        (
+            r#""session":"sess_5f4e3d2c1b0a99887766554433221f0e""#,
+            r#""session":"<SECRET_1>""#,
+        ),
+        (
+            "Claude-Session: https://claude.ai/code/session_01KrB4sxBt6oYTCC",
+            "Claude-Session: <SECRET_1>",
+        ),
+        ("secret=deploy_token_v2", "secret=deploy_token_v2"),
+        (
+            "session=2026-11-21T10:00:00Z",
+            "session=2026-11-21T10:00:00Z",
+        ),
+    ]);
+}

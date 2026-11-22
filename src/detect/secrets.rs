@@ -1,7 +1,7 @@
 //! Secrets / tokens. Highest stakes: bias toward over-detection.
 //!
 //! Two layers: high-precision known-prefix / structural credentials that are
-//! always redacted, and contextual entropy that fires only on the value of a
+//! always redacted, and a contextual check that fires only on the value of a
 //! suspicious key. Private-key blocks span lines and are handled by the engine.
 
 use std::cmp::Reverse;
@@ -210,7 +210,7 @@ static XML_ELEMENT: LazyLock<Regex> = LazyLock::new(|| {
     .unwrap()
 });
 
-/// A suspicious key whose value should be entropy-checked (contextual scan).
+/// A suspicious key whose value should be checked (contextual scan).
 /// The key may carry a prefix (`access_token`, `refreshToken`, `SECRET_KEY_BASE`)
 /// and a closing quote (`"password"=>`, `"api_key":`), escaped or not
 /// (`\"token\":`). A quoted key may be followed by a comma, as in a Rails SQL
@@ -241,9 +241,30 @@ static COOKIE_PAIR: LazyLock<Regex> =
 const COOKIE_ATTRIBUTES: [&str; 5] = ["path", "domain", "expires", "max-age", "samesite"];
 
 const KEYED_MIN_LEN: usize = 8;
-const KEYED_MIN_ENTROPY: f64 = 3.0;
 
-/// Cookie values are opaque session material, so there is no entropy gate —
+/// A value that reads as a name rather than a credential: words joined in one
+/// case (`my_secret_name`, `deploy_token_v2`, `GITHUB_TOKEN`, `REDACTED`),
+/// letter-only camel humps (`TokenProvider`), a date or duration, or a path
+/// or reference (`/run/secrets/db`, `$VAR`, `{{tmpl}}`). A word after the
+/// first may end in a short number; a longer digit run (`sess_5f4e3d…`), an
+/// all-digit PIN, or a URL (which can carry a session) is not a name.
+static IDENTIFIER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(concat!(
+        r"^(?:[a-z]+(?:[_.\-](?:[a-z]+[0-9]{0,3}|[0-9]{1,3}))*",
+        r"|[A-Z]+(?:_(?:[A-Z]+[0-9]{0,3}|[0-9]{1,3}))*",
+        r"|[a-z]*(?:[A-Z][a-z]{2,})+",
+        r"|[0-9\-:TZ.]*[\-:TZ.][0-9\-:TZ.]*",
+        r"|[a-z0-9]+(?:/[a-z0-9_.\-]+)+",
+        r"|[/.$%{].*)$",
+    ))
+    .unwrap()
+});
+
+fn is_identifier_shaped(s: &str) -> bool {
+    IDENTIFIER.is_match(s)
+}
+
+/// Cookie values are opaque session material, so there is no shape gate —
 /// only the length floor, which keeps preferences like `locale=en` readable.
 fn cookies(line: &str, out: &mut Vec<Candidate>) {
     for m in COOKIE_HEADER.find_iter(line) {
@@ -472,7 +493,7 @@ fn keyed(
     (start, end): (usize, usize),
     out: &mut Vec<Candidate>,
 ) {
-    let Some(gated) = entropy_gated(prefix, word) else {
+    let Some(gated) = shape_gated(prefix, word) else {
         return;
     };
     let text = &line[start..end];
@@ -480,8 +501,7 @@ fn keyed(
     if is_placeholder_value(text) || is_shell_cwd(key, text) {
         return;
     }
-    if gated && (text.chars().count() < KEYED_MIN_LEN || shannon_entropy(text) < KEYED_MIN_ENTROPY)
-    {
+    if gated && (text.chars().count() < KEYED_MIN_LEN || is_identifier_shaped(text)) {
         return;
     }
     out.push(Candidate {
@@ -496,10 +516,10 @@ fn keyed(
     });
 }
 
-/// Whether a keyed value needs the entropy gate, by the key's credential
+/// Whether a keyed value needs the shape gate, by the key's credential
 /// word: a password is redacted whatever it looks like, but `token`, `secret`
 /// and `key` also name non-secrets (`token_type=bearer`). `None`: not a key.
-fn entropy_gated(prefix: &str, word: &str) -> Option<bool> {
+fn shape_gated(prefix: &str, word: &str) -> Option<bool> {
     let separated = prefix.is_empty()
         || prefix.ends_with(['_', '-'])
         || (prefix.ends_with(|c: char| c.is_ascii_lowercase())
@@ -677,26 +697,4 @@ pub fn private_key(line: &str) -> Option<(usize, usize, bool)> {
 pub fn private_key_end(line: &str) -> Option<&str> {
     let (_, label, end) = find_tag(line, "-----END", 0)?;
     label_is_private_key(label).then(|| &line[end..])
-}
-
-/// Shannon entropy in bits per character.
-fn shannon_entropy(s: &str) -> f64 {
-    let mut counts = [0u32; 256];
-    let mut total = 0u32;
-    for b in s.bytes() {
-        counts[b as usize] += 1;
-        total += 1;
-    }
-    if total == 0 {
-        return 0.0;
-    }
-    let total = total as f64;
-    counts
-        .iter()
-        .filter(|&&c| c > 0)
-        .map(|&c| {
-            let p = c as f64 / total;
-            -p * p.log2()
-        })
-        .sum()
 }
