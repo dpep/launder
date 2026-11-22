@@ -14,10 +14,16 @@ use crate::input::{Input, LineReader};
 use crate::report::Report;
 use crate::watchlist::Watchlist;
 
+const AFTER_HELP: &str = "\
+Exit codes:
+  0  success; with --check, nothing needed scrubbing
+  1  --check only: something was scrubbed
+  2  error (bad flag, unreadable file, ...)";
+
 /// Scrub identifying paths, secrets, and contacts from logs and stack traces,
 /// keeping everything a reader needs to help.
 #[derive(Debug, Parser)]
-#[command(name = "launder", version, about)]
+#[command(name = "launder", version, about, after_help = AFTER_HELP)]
 #[command(group(ArgGroup::new("structured").args(["json", "ndjson"])))]
 struct Cli {
     /// Input files (stdin if none).
@@ -70,12 +76,17 @@ struct Cli {
     /// Never scrub TERM (a false positive). Secrets are always scrubbed.
     #[arg(long = "keep", value_name = "TERM", value_delimiter = ',')]
     keep: Vec<String>,
+
+    /// Exit 1 if anything was scrubbed, 0 if clean (for hooks and CI).
+    #[arg(long = "check")]
+    check: bool,
 }
 
 pub fn run() -> ExitCode {
     let cli = Cli::parse();
     match execute(&cli) {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(scrubbed) if scrubbed && cli.check => ExitCode::from(1),
+        Ok(_) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("launder: {e:#}");
             ExitCode::from(2)
@@ -83,7 +94,8 @@ pub fn run() -> ExitCode {
     }
 }
 
-fn execute(cli: &Cli) -> Result<()> {
+/// Launder the input; `Ok(true)` when anything was scrubbed.
+fn execute(cli: &Cli) -> Result<bool> {
     let enabled = Config::resolve_types(cli.only.as_deref(), cli.except.as_deref())?;
     let cfg = Config {
         enabled,
@@ -143,7 +155,7 @@ fn execute(cli: &Cli) -> Result<()> {
     if cli.report {
         eprintln!("{}", report.render());
     }
-    Ok(())
+    Ok(report.total() > 0)
 }
 
 fn open_output(path: Option<&str>, inputs: &[String]) -> Result<Box<dyn Write>> {

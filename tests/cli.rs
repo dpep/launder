@@ -79,6 +79,17 @@ fn invalid_utf8_is_replaced_and_the_run_continues() {
 }
 
 #[test]
+fn check_exits_one_when_anything_was_scrubbed() {
+    assert_eq!(run(&["--check"], b"mail ops@dpep.io\n").0, 1);
+    assert_eq!(run(&["--check"], b"all clear\n").0, 0);
+    // Without --check a scrub is still success, so `| pbcopy` is fine.
+    assert_eq!(run(&[], b"mail ops@dpep.io\n").0, 0);
+    assert_eq!(run(&["--check", "--bogus"], b"").0, 2);
+    let (_, help, _) = run(&["--help"], b"");
+    assert!(help.contains("Exit codes:"), "{help}");
+}
+
+#[test]
 fn launder_watch_adds_to_watch_flags() {
     let mut child = launder()
         .env("LAUNDER_WATCH", "globex,initech")
