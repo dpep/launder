@@ -116,7 +116,7 @@ pub fn host(line: &str, extra: &[String], out: &mut Vec<Candidate>) {
             continue;
         }
         let mut from = 0;
-        while let Some(rel) = line[from..].find(name.as_str()) {
+        while let Some(rel) = memchr::memmem::find(&line.as_bytes()[from..], name.as_bytes()) {
             let start = from + rel;
             let end = start + name.len();
             if is_token_boundary(line, start, end) {

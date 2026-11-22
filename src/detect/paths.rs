@@ -113,7 +113,7 @@ pub fn detect_home_dir(line: &str, home_dir: &str, owner: &str, out: &mut Vec<Ca
         return;
     }
     let mut from = 0;
-    while let Some(rel) = line[from..].find(home_dir) {
+    while let Some(rel) = memchr::memmem::find(&line.as_bytes()[from..], home_dir.as_bytes()) {
         let start = from + rel;
         let end = start + home_dir.len();
         // The prefix must end at a name boundary, so $HOME=/Users/dp doesn't

@@ -278,7 +278,7 @@ fn bare_occurrences(line: &str, user: &str) -> Vec<(usize, usize)> {
     }
     let bytes = line.as_bytes();
     let mut from = 0;
-    while let Some(rel) = line[from..].find(user) {
+    while let Some(rel) = memchr::memmem::find(&bytes[from..], user.as_bytes()) {
         let start = from + rel;
         let end = start + user.len();
         let before_ok = start == 0 || !is_word_byte(bytes[start - 1]);
