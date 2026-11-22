@@ -239,7 +239,7 @@ static NETRC_TOKEN: LazyLock<Regex> =
 /// The words that make a key a credential key. Bare `key` is not one:
 /// `sort_key`, `cache_key` are not secrets, and `auth` is spelled out so
 /// `author` is not.
-const CREDENTIAL_WORDS: &str = r"password|passwd|passphrase|pass|pwd|secret|token|credentials?|signature|sig|session(?:[_-]?id)?|(?:api|access|account|private|master|encryption|signing)[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?";
+const CREDENTIAL_WORDS: &str = r"password|passwd|passphrase|pass|pwd|secret|token|credentials?|signature|sig|session(?:[_-]?id)?|(?:api|access|account|private|master|encryption|signing|secret)[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?";
 
 /// A long CLI flag naming a credential, then its value after a space:
 /// `--password X`, `--db-pass X`, `--api-key X`.
@@ -313,6 +313,15 @@ static IDENTIFIER: LazyLock<Regex> = LazyLock::new(|| {
 
 fn is_identifier_shaped(s: &str) -> bool {
     IDENTIFIER.is_match(s)
+}
+
+/// One word in one case too long to be a name: identifiers that long have
+/// several words (`user_profile_cache`), random letters have one.
+const LETTER_RUN_MIN_LEN: usize = 16;
+
+fn is_letter_run(s: &str) -> bool {
+    s.len() >= LETTER_RUN_MIN_LEN
+        && (s.bytes().all(|b| b.is_ascii_lowercase()) || s.bytes().all(|b| b.is_ascii_uppercase()))
 }
 
 /// Cookie values are opaque session material, so there is no shape gate —
@@ -596,7 +605,10 @@ fn keyed(
     if is_placeholder_value(text) || is_shell_cwd(key, text) {
         return;
     }
-    if gated && (text.chars().count() < KEYED_MIN_LEN || is_identifier_shaped(text)) {
+    if gated
+        && (text.chars().count() < KEYED_MIN_LEN
+            || (is_identifier_shaped(text) && !is_letter_run(text)))
+    {
         return;
     }
     // An ungated word names a password, which shares its placeholder with the

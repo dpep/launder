@@ -1980,3 +1980,33 @@ fn a_keyed_token_keeps_its_number_and_the_text_after_it() {
         ),
     ]);
 }
+
+#[test]
+fn a_long_one_word_letter_run_is_a_secret() {
+    check(&[
+        (
+            concat!("api_key=qwertyuiop", "asdfghjklzxcvb"),
+            "api_key=<SECRET_1>",
+        ),
+        (
+            concat!("SECRET_KEY=QWERTYUIOP", "ASDFGHJKLZXCVB"),
+            "SECRET_KEY=<SECRET_1>",
+        ),
+        (
+            concat!("secret_key=Zx9Yw8Vu7Ts6", "Rq5Po4Nm3Lk2"),
+            "secret_key=<SECRET_1>",
+        ),
+        (
+            concat!("secret_key=$Zx9Yw8Vu7Ts6", "Rq5Po4Nm3Lk2"),
+            "secret_key=<SECRET_1>",
+        ),
+        // A shorter word, or several, is a name.
+        ("token=placeholder", "token=placeholder"),
+        ("token=GITHUB_TOKEN", "token=GITHUB_TOKEN"),
+        (
+            "secret=my_long_secret_name_here",
+            "secret=my_long_secret_name_here",
+        ),
+        ("secret_key=SECRET_KEY_BASE", "secret_key=SECRET_KEY_BASE"),
+    ]);
+}
