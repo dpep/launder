@@ -362,29 +362,49 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
 
 /// Merge overlapping secrets in `out[from..]` into one span, labeled by its
 /// highest-rank member, so a narrow match inside a wider one can't leave the
-/// wider one's tail raw. Logins (`BareUser`) are left alone.
+/// wider one's tail raw. A tail that holds no secret material is left out,
+/// so the span is the member's own and keeps its number. Logins
+/// (`BareUser`) are left alone.
 fn merge_overlaps(line: &str, out: &mut Vec<Candidate>, from: usize) {
     let (mut secrets, logins): (Vec<_>, Vec<_>) = out
         .drain(from..)
         .partition(|c| matches!(c.action, Action::Number { .. }));
     secrets.sort_by_key(|c| (c.start, Reverse(c.end)));
+    // Each group: its extent and its highest-rank member.
+    let mut groups: Vec<(usize, usize, Candidate)> = Vec::new();
     for c in secrets {
-        match out[from..].last_mut() {
-            Some(last) if c.start < last.end => {
-                let (start, end) = (last.start, last.end.max(c.end));
-                if (c.rank, c.width()) > (last.rank, last.width()) {
-                    *last = c;
-                }
-                last.start = start;
-                last.end = end;
-                if let Action::Number { value, .. } = &mut last.action {
-                    *value = line[start..end].to_string();
+        match groups.last_mut() {
+            Some((_, end, top)) if c.start < *end => {
+                *end = (*end).max(c.end);
+                if (c.rank, c.width()) > (top.rank, top.width()) {
+                    *top = c;
                 }
             }
-            _ => out.push(c),
+            _ => groups.push((c.start, c.end, c)),
         }
     }
+    for (start, mut end, mut top) in groups {
+        if end > top.end && is_diagnostic_tail(&line[top.end..end]) {
+            end = top.end;
+        }
+        top.start = start;
+        top.end = end;
+        if let Action::Number { value, .. } = &mut top.action {
+            *value = line[start..end].to_string();
+        }
+        out.push(top);
+    }
     out.extend(logins);
+}
+
+/// Text a greedy value ran on into past the secret it holds: punctuation that
+/// can't continue the token (`:`, `.`, `|`), then nothing a secret could be
+/// (`:42`, `.`, `|grep`). `%2B…` or `:Zx9…` continue it.
+fn is_diagnostic_tail(tail: &str) -> bool {
+    let rest = tail.trim_start_matches(|c: char| {
+        c.is_ascii_punctuation() && !matches!(c, '+' | '/' | '=' | '%' | '-' | '_')
+    });
+    rest.len() < tail.len() && (rest.chars().count() < KEYED_MIN_LEN || is_identifier_shaped(rest))
 }
 
 fn scan(line: &str, out: &mut Vec<Candidate>) {

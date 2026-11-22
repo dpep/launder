@@ -1936,3 +1936,47 @@ fn a_secret_that_starts_like_a_reference_is_redacted() {
         ("secret=.env.production", "secret=.env.production"),
     ]);
 }
+
+#[test]
+fn a_keyed_token_keeps_its_number_and_the_text_after_it() {
+    check(&[
+        (
+            concat!(
+                "GITHUB_TOKEN=ghp_aaaaaaaaaaaaaaaa",
+                "aaaaaaaaaaaaaaaaaaaa token=ghp_aaaaaaaaaaaaaaaa",
+                "aaaaaaaaaaaaaaaaaaaa:42"
+            ),
+            "GITHUB_TOKEN=<TOKEN_1> token=<TOKEN_1>:42",
+        ),
+        (
+            concat!("set token=ghp_aaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaa."),
+            "set token=<TOKEN_1>.",
+        ),
+        (
+            concat!("api_key=sk_live_aaaaaaaa", "aaaaaaaaaaaaaaaa|grep x"),
+            "api_key=<TOKEN_1>|grep x",
+        ),
+        (
+            concat!(
+                "token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.",
+                "dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U:42 at /home/zedd/app/x.rb:42"
+            ),
+            "token=<JWT_1>:42 at ~/app/x.rb:42",
+        ),
+        // More secret material after the token is still part of the secret.
+        (
+            concat!(
+                "token=ghp_aaaaaaaaaaaaaaaa",
+                "aaaaaaaaaaaaaaaaaaaa:Zx9Yw8Vu7Ts6Rq5Po4Nm3"
+            ),
+            "token=<TOKEN_1>",
+        ),
+        (
+            concat!(
+                "token=ghp_aaaaaaaaaaaaaaaa",
+                "aaaaaaaaaaaaaaaaaaaa.Zx9Yw8Vu7Ts6Rq5Po4Nm3"
+            ),
+            "token=<TOKEN_1>",
+        ),
+    ]);
+}
