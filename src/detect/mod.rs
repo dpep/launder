@@ -64,7 +64,7 @@ impl Candidate {
     pub fn kind(&self) -> Option<Kind> {
         match &self.action {
             Action::Number { label, .. } => Some(label.kind()),
-            Action::Home { .. } | Action::Tmpdir => Some(Kind::Path),
+            Action::Home { .. } | Action::Tmpdir | Action::PathUser { .. } => Some(Kind::Path),
             Action::BareUser { .. } => Some(Kind::User),
             Action::FixedSecret(_) => Some(Kind::Secret),
             Action::Keep => None,
@@ -140,6 +140,9 @@ pub enum Action {
     Home { user: String, bare_eligible: bool },
     /// The macOS per-user temp dir → `<TMPDIR>`.
     Tmpdir,
+    /// A username that a path's shape proves (`pytest-of-<u>`, a nested home)
+    /// → `<USER_N>`, registering and enrolling it like a home owner.
+    PathUser { user: String },
     /// A standalone username occurrence → `<USER_N>` (identity already known).
     BareUser { user: String },
     /// An unnumbered secret placeholder: `<PASSWORD>`, `<PRIVATE_KEY>`.

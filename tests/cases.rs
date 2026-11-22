@@ -667,3 +667,54 @@ fn home_prefix_collapses_independently_of_tail() {
         ),
     ]);
 }
+
+#[test]
+fn macos_tmpdir_via_private_symlink_collapses() {
+    check(&[(
+        "tmp_path = PosixPath('/private/var/folders/qx/abc123/T/test0')",
+        "tmp_path = PosixPath('<TMPDIR>/test0')",
+    )]);
+}
+
+#[test]
+fn pytest_temp_dir_owner_is_an_identity() {
+    check(&[
+        (
+            "/var/folders/qx/abc123/T/pytest-of-priya/pytest-3/test0 owner=priya",
+            "<TMPDIR>/pytest-of-<USER_1>/pytest-3/test0 owner=<USER_1>",
+        ),
+        // Short names are scrubbed here too: the position proves the identity.
+        (
+            "/tmp/pytest-of-bob/pytest-1/x.py",
+            "/tmp/pytest-of-<USER_1>/pytest-1/x.py",
+        ),
+        (
+            "/Users/priya/a.py /tmp/pytest-of-priya/pytest-1",
+            "~/a.py /tmp/pytest-of-<USER_1>/pytest-1",
+        ),
+    ]);
+}
+
+#[test]
+fn home_prefix_needs_a_left_boundary() {
+    check(&[
+        // A `root` segment mid-path is not root's home.
+        ("/srv/root/data", "/srv/root/data"),
+        (
+            "ls /var/lib/docker/merged/root/x",
+            "ls /var/lib/docker/merged/root/x",
+        ),
+        ("cd /root/x && ls /root", "cd ~/x && ls ~"),
+        // A home nested in another path keeps its location; only the owner goes.
+        ("/mnt/backup/home/alice/x", "/mnt/backup/home/<USER_1>/x"),
+        ("file:///Users/alice/a.txt", "file:///Users/<USER_1>/a.txt"),
+        (
+            "/mnt/backup/home/alice/x then /home/alice/y",
+            "/mnt/backup/home/<USER_1>/x then ~/y",
+        ),
+        // Separators and punctuation end the username.
+        ("PATH=/usr/bin:/home/alice/bin", "PATH=/usr/bin:~/bin"),
+        ("PATH=/home/alice:/usr/bin", "PATH=~:/usr/bin"),
+        ("(/Users/alice)", "(~)"),
+    ]);
+}

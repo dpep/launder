@@ -152,6 +152,7 @@ impl Engine {
                 bare_eligible,
             } => self.reg.home_prefix(user, *bare_eligible),
             Action::Tmpdir => "<TMPDIR>".to_string(),
+            Action::PathUser { user } => self.reg.path_user(user),
             Action::BareUser { user } => self.reg.user_placeholder(user),
             Action::FixedSecret(text) => text.to_string(),
             Action::Keep => return None,

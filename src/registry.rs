@@ -69,6 +69,13 @@ impl Registry {
         }
     }
 
+    /// Register a username a path proves and return its `<USER_N>`, enrolling
+    /// it for standalone redaction like a home owner.
+    pub fn path_user(&mut self, user: &str) -> String {
+        self.enroll_bare(user);
+        self.user_placeholder(user)
+    }
+
     /// The `<USER_N>` placeholder for an identity, registering it if needed.
     pub fn user_placeholder(&mut self, user: &str) -> String {
         let index = self.identity_index(user);

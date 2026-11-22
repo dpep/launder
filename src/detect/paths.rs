@@ -12,9 +12,13 @@ use regex::Regex;
 
 use super::{Action, Candidate};
 
+/// A username path segment: stops at separators, quotes, and the punctuation
+/// that wraps or lists paths (`PATH=…:…`, `(…)`).
+const NAME: &str = r#"[^/\\\s'"`:;,|()\[\]{}<>]+"#;
+
 /// `/Users/<u>` (macOS) and `/home/<u>` (Linux). Group 1 = username.
 static UNIX_HOME: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"(?:/Users/|/home/)([^/\s'"]+)"#).unwrap());
+    LazyLock::new(|| Regex::new(&format!("(?:/Users/|/home/)({NAME})")).unwrap());
 
 /// `/root` — root's home, collapsed to `~` but not enrolled as a
 /// bare-redactable username.
@@ -22,12 +26,19 @@ static ROOT_HOME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"/root").unwrap
 
 /// `C:\Users\<u>` and `C:\Documents and Settings\<u>` (Windows).
 static WIN_HOME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)[a-z]:\\(?:Users|Documents and Settings)\\([^\\/\s'"]+)"#).unwrap()
+    Regex::new(&format!(
+        r"(?i)[a-z]:\\(?:Users|Documents and Settings)\\({NAME})"
+    ))
+    .unwrap()
 });
 
-/// macOS per-user temp dir: `/var/folders/<xx>/<yyyy…>/T` → `<TMPDIR>`.
+/// macOS per-user temp dir: `[/private]/var/folders/<xx>/<yyyy…>/T` → `<TMPDIR>`.
 static MACOS_TMPDIR: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#"/var/folders/[^/\s'"]+/[^/\s'"]+/T\b"#).unwrap());
+    LazyLock::new(|| Regex::new(r#"(?:/private)?/var/folders/[^/\s'"]+/[^/\s'"]+/T\b"#).unwrap());
+
+/// pytest's per-user temp root, `pytest-of-<u>`. Group 1 = username.
+static PYTEST_OF: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(&format!("/pytest-of-({NAME})")).unwrap());
 
 /// Segments directly under `/Users` that are system folders, not user homes.
 const NON_USER_HOMES: &[&str] = &["Shared"];
@@ -35,8 +46,19 @@ const NON_USER_HOMES: &[&str] = &["Shared"];
 pub fn detect(line: &str, out: &mut Vec<Candidate>) {
     for caps in UNIX_HOME.captures_iter(line) {
         let m = caps.get(0).unwrap();
-        let user = caps.get(1).unwrap().as_str();
-        if NON_USER_HOMES.contains(&user) {
+        let user = caps.get(1).unwrap();
+        if NON_USER_HOMES.contains(&user.as_str()) {
+            continue;
+        }
+        // Nested in a longer path (a backup, a container root): keep the
+        // location, scrub only the owner.
+        if nested(line, m.start()) {
+            out.push(path_user(
+                user.start(),
+                user.end(),
+                "nested_home",
+                user.as_str(),
+            ));
             continue;
         }
         let subtype = if m.as_str().starts_with("/Users/") {
@@ -44,12 +66,12 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         } else {
             "linux_home"
         };
-        out.push(home(m.start(), m.end(), subtype, user, true));
+        out.push(home(m.start(), m.end(), subtype, user.as_str(), true));
     }
 
     for m in ROOT_HOME.find_iter(line) {
-        // Reject `/rootfs` and friends.
-        if !home_boundary(line, m.end()) {
+        // Reject `/rootfs` and a `root` segment inside another path.
+        if nested(line, m.start()) || !home_boundary(line, m.end()) {
             continue;
         }
         out.push(home(m.start(), m.end(), "root_home", "root", false));
@@ -70,6 +92,16 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
             rank: 0,
         });
     }
+
+    for caps in PYTEST_OF.captures_iter(line) {
+        let user = caps.get(1).unwrap();
+        out.push(path_user(
+            user.start(),
+            user.end(),
+            "pytest_user",
+            user.as_str(),
+        ));
+    }
 }
 
 /// Collapse a literal `$HOME` prefix (from the local-identity signal) to `~`,
@@ -86,10 +118,22 @@ pub fn detect_home_dir(line: &str, home_dir: &str, owner: &str, out: &mut Vec<Ca
         let end = start + home_dir.len();
         // The prefix must end at a name boundary, so $HOME=/Users/dp doesn't
         // swallow /Users/dpepper.
-        if home_boundary(line, end) {
+        if !nested(line, start) && home_boundary(line, end) {
             out.push(home(start, end, "home_env", owner, true));
         }
         from = end;
+    }
+}
+
+fn path_user(start: usize, end: usize, subtype: &'static str, user: &str) -> Candidate {
+    Candidate {
+        start,
+        end,
+        subtype: Some(subtype),
+        action: Action::PathUser {
+            user: user.to_string(),
+        },
+        rank: 0,
     }
 }
 
@@ -110,6 +154,15 @@ fn home(
         },
         rank: 0,
     }
+}
+
+/// True if the path starting at `pos` continues a longer path or name, so it
+/// isn't a home directory itself (`/srv/root`, `/mnt/backup/home/u`).
+fn nested(line: &str, pos: usize) -> bool {
+    line[..pos]
+        .chars()
+        .next_back()
+        .is_some_and(|c| c.is_alphanumeric() || "_-./~\\".contains(c))
 }
 
 /// True if the char at `pos` ends a directory name (so a `$HOME` prefix match is
