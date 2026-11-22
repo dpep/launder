@@ -718,3 +718,23 @@ fn home_prefix_needs_a_left_boundary() {
         ("(/Users/alice)", "(~)"),
     ]);
 }
+
+#[test]
+fn identities_are_learned_with_path_disabled() {
+    let only = |types: &str| Config {
+        enabled: Config::resolve_types(Some(types), None).unwrap(),
+        ..Config::default()
+    };
+    let except = |types: &str| Config {
+        enabled: Config::resolve_types(None, Some(types)).unwrap(),
+        ..Config::default()
+    };
+    assert_eq!(
+        launder(only("user"), "/Users/priya/a.rs\nby priya").0,
+        "/Users/<USER_1>/a.rs\nby <USER_1>"
+    );
+    assert_eq!(
+        launder(except("path"), "/tmp/pytest-of-priya/x ops@dpep.io priya").0,
+        "/tmp/pytest-of-<USER_1>/x <EMAIL_1> <USER_1>"
+    );
+}

@@ -89,11 +89,17 @@ impl Engine {
                 rank: u8::MAX,
             });
         }
+        // Path detection always runs: the identities it finds feed bare-username
+        // matching even when paths themselves are left alone.
+        let mut paths = Vec::new();
+        detect::paths::detect(text, &mut paths);
+        if let Some((prefix, owner)) = &self.home {
+            detect::paths::detect_home_dir(text, prefix, owner, &mut paths);
+        }
         if self.cfg.enabled(Kind::Path) {
-            detect::paths::detect(text, &mut candidates);
-            if let Some((prefix, owner)) = &self.home {
-                detect::paths::detect_home_dir(text, prefix, owner, &mut candidates);
-            }
+            candidates.append(&mut paths);
+        } else {
+            self.learn_identities(paths);
         }
         if secrets_on {
             detect::secrets::detect(text, &mut candidates);
@@ -168,6 +174,26 @@ impl Engine {
             byte_start: c.start,
             byte_end: c.end,
         })
+    }
+
+    /// Register the identities path candidates reveal without replacing them,
+    /// in first-seen order.
+    fn learn_identities(&mut self, mut paths: Vec<Candidate>) {
+        paths.sort_by_key(|c| c.start);
+        for c in paths {
+            match c.action {
+                Action::Home {
+                    user,
+                    bare_eligible,
+                } => {
+                    self.reg.home_prefix(&user, bare_eligible);
+                }
+                Action::PathUser { user } => {
+                    self.reg.path_user(&user);
+                }
+                _ => {}
+            }
+        }
     }
 
     /// Find standalone occurrences of registered usernames outside `covered`
