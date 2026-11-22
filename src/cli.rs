@@ -178,7 +178,7 @@ fn execute(cli: &Cli) -> Result<bool> {
         let line = match reader.read()? {
             None => break,
             Some(Input::Line(line)) => line,
-            Some(Input::End(_)) => continue,
+            Some(Input::End) => continue,
         };
         let result = engine.process_line(&line);
         report.record(&result.findings);

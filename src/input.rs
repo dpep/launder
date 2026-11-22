@@ -12,8 +12,8 @@ use anyhow::{Context, Result};
 pub enum Input {
     /// A line without its trailing newline.
     Line(String),
-    /// The named source is exhausted (`stdin` or the file path as given).
-    End(String),
+    /// A source is exhausted: a chance to flush before the next one blocks.
+    End,
 }
 
 /// A source of lines: stdin or a sequence of files, read lazily.
@@ -80,8 +80,8 @@ impl LineReader {
             .read_until(b'\n', &mut buf)
             .with_context(|| format!("reading {name}"))?;
         if n == 0 {
-            let (name, _) = self.current.take().unwrap();
-            return Ok(Some(Input::End(name)));
+            self.current = None;
+            return Ok(Some(Input::End));
         }
         // Strip a single trailing \n (and \r) — restored by the caller.
         if buf.ends_with(b"\n") {
