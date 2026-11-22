@@ -153,9 +153,12 @@ impl Engine {
         detect::literal::watch(&self.watch, &lower, &mut candidates);
 
         // --only / --except judge each span by what it scrubs, whichever
-        // detector found it.
+        // detector found it; a --watch term was named outright, so it stays.
         let kept = self.kept_spans(&lower);
-        candidates.retain(|c| c.kind().is_none_or(|k| self.cfg.enabled(k)) && !is_kept(c, &kept));
+        candidates.retain(|c| {
+            let wanted = c.subtype == Some("watch") || c.kind().is_none_or(|k| self.cfg.enabled(k));
+            wanted && !is_kept(c, &kept)
+        });
         let resolved = resolve(candidates);
         let covered: Vec<(usize, usize)> = resolved.iter().map(|c| (c.start, c.end)).collect();
 

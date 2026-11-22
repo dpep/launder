@@ -1483,12 +1483,23 @@ fn watch_scrubs_terms_and_whole_domains() {
 }
 
 #[test]
-fn watch_terms_answer_to_only_and_except() {
-    let cfg = Config {
-        enabled: Config::resolve_types(None, Some("term")).unwrap(),
-        ..with_terms(&["globex"], &[])
-    };
-    assert_eq!(launder(cfg, "globex").0, "globex");
+fn watch_terms_are_scrubbed_whatever_only_and_except_say() {
+    // The user named the term: --only / --except never turn it off.
+    for (only, except) in [
+        (None, Some("term")),
+        (None, Some("host")),
+        (Some("path"), None),
+    ] {
+        let cfg = Config {
+            enabled: Config::resolve_types(only, except).unwrap(),
+            ..with_terms(&["globex", "acme.com"], &[])
+        };
+        assert_eq!(
+            launder(cfg, "globex acme.com").0,
+            "<TERM_1> <HOST_1>",
+            "{only:?} {except:?}"
+        );
+    }
 }
 
 #[test]
