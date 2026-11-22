@@ -1732,3 +1732,58 @@ fn docker_login_short_password_flag_is_redacted() {
         ("docker run -p 8080:80 nginx", "docker run -p 8080:80 nginx"),
     ]);
 }
+
+#[test]
+fn token_in_the_login_position_is_a_secret() {
+    check(&[
+        (
+            concat!(
+                "curl -u Zx9qL2mN8pR4tV6w",
+                "Y1bC3dF5gH7jK0aS: https://api.example.com"
+            ),
+            "curl -u <TOKEN_1>: https://api.example.com",
+        ),
+        (
+            concat!(
+                "curl --user Zx9qL2mN8pR4tV6w",
+                "Y1bC3dF5gH7jK0aS: https://x.example.com"
+            ),
+            "curl --user <TOKEN_1>: https://x.example.com",
+        ),
+        (
+            "git clone https://4f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a@github.com/o/r.git",
+            "git clone https://<TOKEN_1>@github.com/o/r.git",
+        ),
+        (
+            concat!(
+                "https://Zx9qL2mN8pR4tV6w",
+                "Y1bC3dF5gH7jK0aS@api.example.com/x"
+            ),
+            "https://<TOKEN_1>@api.example.com/x",
+        ),
+        (
+            "SENTRY_DSN=https://0123456789abcdef0123456789abcdef@o123.ingest.sentry.io/456",
+            "SENTRY_DSN=https://<TOKEN_1>@o123.ingest.sentry.io/456",
+        ),
+        (
+            concat!(
+                "machine api.example.com login Zx9qL2mN8pR4tV6w",
+                "Y1bC3dF5gH7jK0aS password hunter2"
+            ),
+            "machine api.example.com login <TOKEN_1> password <PASSWORD_1>",
+        ),
+        // A plain login is a user, not a token.
+        (
+            "git clone https://alice@github.com/o/r.git",
+            "git clone https://<EMAIL_1>/o/r.git",
+        ),
+        (
+            "curl -u alice:hunter2 https://x.example.com",
+            "curl -u <USER_1>:<PASSWORD_1> https://x.example.com",
+        ),
+        (
+            "postgres://svc_orders_reader:hunter2@db.example.com/app",
+            "postgres://<USER_1>:<PASSWORD_1>@db.example.com/app",
+        ),
+    ]);
+}

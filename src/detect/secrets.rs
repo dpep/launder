@@ -108,6 +108,7 @@ const ROLE_USERS: [&str; 11] = [
 
 /// A credential's login as an identity → `<USER_N>`. Short names share the
 /// bare-username floor: too generic (`sa`, `app`, `git`) to identify anyone.
+/// An API key passed as the login (`curl -u KEY:`) is a token instead.
 fn login(
     line: &str,
     (start, end): (usize, usize),
@@ -115,6 +116,9 @@ fn login(
     out: &mut Vec<Candidate>,
 ) {
     let name = &line[start..end];
+    if token_login(line, (start, end), subtype, out) {
+        return;
+    }
     if name.len() < 4 || ROLE_USERS.iter().any(|r| name.eq_ignore_ascii_case(r)) {
         return;
     }
@@ -129,6 +133,38 @@ fn login(
     });
 }
 
+/// Logins are short names; a long one that doesn't read as a name is a key.
+const TOKEN_LOGIN_MIN_LEN: usize = 16;
+
+/// Push a login that is a key (`<TOKEN_N>`), returning whether it was one.
+fn token_login(
+    line: &str,
+    (start, end): (usize, usize),
+    subtype: &'static str,
+    out: &mut Vec<Candidate>,
+) -> bool {
+    let name = &line[start..end];
+    if name.len() < TOKEN_LOGIN_MIN_LEN || is_identifier_shaped(name) {
+        return false;
+    }
+    out.push(Candidate {
+        start,
+        end,
+        subtype: Some(subtype),
+        action: Action::Number {
+            label: Label::Token,
+            value: name.to_string(),
+        },
+        rank: 40,
+    });
+    true
+}
+
+/// A URL's userinfo with no password (`https://KEY@host`, a Sentry DSN). Only
+/// a key-shaped one is redacted here; `alice@host` is left to the email rule.
+static URL_USER_ONLY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"[a-zA-Z][a-zA-Z0-9+.\-]*://([^:/@\s'"]+)@"#).unwrap());
+
 /// A password in a credential's userinfo → `<PASSWORD_N>`.
 fn userinfo_password(
     line: &str,
@@ -136,6 +172,10 @@ fn userinfo_password(
     subtype: &'static str,
     out: &mut Vec<Candidate>,
 ) {
+    // `curl -u KEY:` sends an empty password.
+    if start == end {
+        return;
+    }
     out.push(Candidate {
         start,
         end,
@@ -182,7 +222,7 @@ fn encoded_url_credential(line: &str, at: usize, out: &mut Vec<Candidate>) {
 /// `curl -u user:pass` / `--user user:pass`. Only after `curl`: elsewhere
 /// `-u 1000:1000` is a uid:gid.
 static CURL_USER: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"\bcurl\b.*?\s(?:-u|--user)(?:\s+|=)['"]?([^\s:'"]+):([^\s'"]+)"#).unwrap()
+    Regex::new(r#"\bcurl\b.*?\s(?:-u|--user)(?:\s+|=)['"]?([^\s:'"]+):([^\s'"]*)"#).unwrap()
 });
 
 /// `docker login -p PASS`. Only after `docker login`: elsewhere `-p` is a
@@ -420,6 +460,10 @@ fn scan(line: &str, out: &mut Vec<Candidate>) {
             login(line, span(1), subtype, out);
             userinfo_password(line, span(2), subtype, out);
         }
+    }
+    for caps in URL_USER_ONLY.captures_iter(line) {
+        let user = caps.get(1).unwrap();
+        token_login(line, (user.start(), user.end()), "url_credential", out);
     }
     for m in ENCODED_URL.find_iter(line) {
         encoded_url_credential(line, m.end(), out);
