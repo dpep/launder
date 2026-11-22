@@ -2043,3 +2043,15 @@ fn dashed_digit_groups_are_a_key_not_a_date() {
         ),
     ]);
 }
+
+#[test]
+fn version_is_a_word_not_any_ending() {
+    check(&[
+        ("conversion 8.8.4.4", "conversion <IP_1>"),
+        ("inversion=8.8.4.4", "inversion=<IP_1>"),
+        ("app_version=1.2.3.4", "app_version=1.2.3.4"),
+        ("APP_VERSION: 1.2.3.4", "APP_VERSION: 1.2.3.4"),
+        ("RestoreVersion = 8.8.8.8", "RestoreVersion = 8.8.8.8"),
+        ("ver 1.2.3.4", "ver 1.2.3.4"),
+    ]);
+}

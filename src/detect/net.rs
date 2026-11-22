@@ -182,8 +182,11 @@ fn is_version(line: &str, start: usize) -> bool {
         .rsplit(|c: char| !c.is_ascii_alphabetic())
         .next()
         .unwrap_or("");
-    // `version` may end a compound name (`RestoreVersion`, `app_version`).
-    word.eq_ignore_ascii_case("ver") || word.to_ascii_lowercase().ends_with("version")
+    // `version` may end a compound name at a hump (`RestoreVersion`) or a
+    // separator (`app_version`), but not inside a word (`conversion`).
+    word.eq_ignore_ascii_case("ver")
+        || word.eq_ignore_ascii_case("version")
+        || word.ends_with("Version")
 }
 
 fn parse_ipv4(s: &str) -> Option<[u8; 4]> {
