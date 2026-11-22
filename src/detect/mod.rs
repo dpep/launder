@@ -7,6 +7,7 @@
 //! first-seen order across the whole stream.
 
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 
 pub mod ids;
 pub mod net;
@@ -200,16 +201,83 @@ pub fn resolve(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
             .then(a.start.cmp(&b.start))
     });
 
-    let mut chosen: Vec<Candidate> = Vec::new();
-    for cand in candidates {
+    // Accepted spans are disjoint, so only the one starting last before
+    // `cand.end` can overlap it. Empty spans replace nothing and are dropped.
+    let mut chosen: BTreeMap<usize, Candidate> = BTreeMap::new();
+    for cand in candidates.into_iter().filter(|c| c.start < c.end) {
         let overlaps = chosen
-            .iter()
-            .any(|c| cand.start < c.end && c.start < cand.end);
+            .range(..cand.end)
+            .next_back()
+            .is_some_and(|(_, c)| cand.start < c.end && c.start < cand.end);
         if !overlaps {
-            chosen.push(cand);
+            chosen.insert(cand.start, cand);
         }
     }
+    chosen.into_values().collect()
+}
 
-    chosen.sort_by_key(|c| c.start);
-    chosen
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The quadratic greedy scan `resolve` must agree with.
+    fn resolve_naive(mut candidates: Vec<Candidate>) -> Vec<(usize, usize)> {
+        candidates.sort_by(|a, b| {
+            b.precedence()
+                .cmp(&a.precedence())
+                .then(b.rank.cmp(&a.rank))
+                .then(b.width().cmp(&a.width()))
+                .then(a.start.cmp(&b.start))
+        });
+        let mut chosen: Vec<Candidate> = Vec::new();
+        for cand in candidates {
+            if !chosen
+                .iter()
+                .any(|c| cand.start < c.end && c.start < cand.end)
+            {
+                chosen.push(cand);
+            }
+        }
+        let mut spans: Vec<_> = chosen.iter().map(|c| (c.start, c.end)).collect();
+        spans.sort();
+        spans
+    }
+
+    #[test]
+    fn resolve_matches_naive_greedy() {
+        let labels = [Label::Token, Label::Email, Label::Ip, Label::Host];
+        let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+        let mut next = |n: u64| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % n) as usize
+        };
+        for _ in 0..200 {
+            let cands: Vec<Candidate> = (0..40)
+                .map(|_| {
+                    let start = next(100);
+                    let action = match next(5) {
+                        4 => Action::Keep,
+                        i => Action::Number {
+                            label: labels[i],
+                            value: String::new(),
+                        },
+                    };
+                    Candidate {
+                        start,
+                        end: start + 1 + next(15),
+                        subtype: None,
+                        action,
+                        rank: next(2) as u8,
+                    }
+                })
+                .collect();
+            let fast: Vec<_> = resolve(cands.clone())
+                .iter()
+                .map(|c| (c.start, c.end))
+                .collect();
+            assert_eq!(fast, resolve_naive(cands));
+        }
+    }
 }

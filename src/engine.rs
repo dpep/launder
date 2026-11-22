@@ -132,6 +132,7 @@ impl Engine {
         }
 
         findings.sort_by_key(|f| f.byte_start);
+        set_columns(line, &mut findings);
         let output = render(line, &findings);
         LineResult {
             output: Some(output),
@@ -160,7 +161,7 @@ impl Engine {
             kind,
             subtype: c.subtype,
             line: self.line_no,
-            col: line[..c.start].chars().count() + 1,
+            col: 0, // set by `set_columns`
             len: original.chars().count(),
             replacement,
             original,
@@ -169,13 +170,16 @@ impl Engine {
         })
     }
 
-    /// Find standalone occurrences of registered usernames outside `covered`.
+    /// Find standalone occurrences of registered usernames outside `covered`
+    /// (resolved spans, sorted by start).
     fn detect_bare_users(&self, line: &str, covered: &[(usize, usize)]) -> Vec<Candidate> {
         let mut out = Vec::new();
         for user in self.reg.bare_users() {
             for (start, end) in bare_occurrences(line, user) {
-                let overlaps = covered.iter().any(|&(s, e)| start < e && s < end);
-                if overlaps {
+                // `covered` is sorted and disjoint: only the last span starting
+                // before `end` can overlap.
+                let i = covered.partition_point(|&(s, _)| s < end);
+                if i > 0 && covered[i - 1].1 > start {
                     continue;
                 }
                 out.push(Candidate {
@@ -208,6 +212,17 @@ impl Engine {
             output: None,
             findings: vec![],
         }
+    }
+}
+
+/// Fill each finding's 1-based char column in one pass over the line, so a
+/// line with many findings stays linear. Findings must be sorted by start.
+fn set_columns(line: &str, findings: &mut [Finding]) {
+    let (mut byte, mut col) = (0, 1);
+    for f in findings {
+        col += line[byte..f.byte_start].chars().count();
+        byte = f.byte_start;
+        f.col = col;
     }
 }
 
