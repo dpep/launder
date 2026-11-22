@@ -1235,3 +1235,31 @@ fn xml_credential_elements_are_redacted() {
         ("<token>short</token>", "<token>short</token>"),
     ]);
 }
+
+#[test]
+fn aws_secret_beside_its_access_key_id_is_redacted() {
+    check(&[
+        (
+            concat!(
+                "AKIAIOSFODNN7EXAMPLE,wJalrXUtnFEMI/K7MDENG/",
+                "bPxRfiCYEXAMPLEKEY"
+            ),
+            "<TOKEN_1>,<SECRET_1>",
+        ),
+        (
+            concat!(
+                "zedd,,ASIAIOSFODNN7EXAMPLE,wJalrXUtnFEMI/K7MDENG/",
+                "bPxRfiCYEXAMPLEKEY"
+            ),
+            "zedd,,<TOKEN_1>,<SECRET_1>",
+        ),
+        // A git SHA is hex, never an AWS secret.
+        (
+            concat!(
+                "AKIAIOSFODNN7EXAMPLE at 95f2a31c4e8b2d1f0a9e",
+                "8d7c6b5a4f3e2d1c0b9a"
+            ),
+            "<TOKEN_1> at 95f2a31c4e8b2d1f0a9e8d7c6b5a4f3e2d1c0b9a",
+        ),
+    ]);
+}

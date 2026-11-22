@@ -245,6 +245,9 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
             });
         }
     }
+    if out.iter().any(|c| c.subtype == Some("aws")) {
+        aws_secret_keys(line, out);
+    }
     for (re, subtype) in WEBHOOKS.iter() {
         for caps in re.captures_iter(line) {
             let path = caps.get(1).unwrap();
@@ -345,6 +348,30 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
                 keyed(line, "password", "", "password", span, out);
             }
         }
+    }
+}
+
+static BASE64_RUN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"[A-Za-z0-9/+]+").unwrap());
+
+/// An AWS secret access key needs no key name when its access key ID shares
+/// the line (CSV exports, pasted pairs): any standalone 40-char base64 run.
+/// All-hex runs are git SHAs.
+fn aws_secret_keys(line: &str, out: &mut Vec<Candidate>) {
+    for m in BASE64_RUN.find_iter(line) {
+        let s = m.as_str();
+        if s.len() != 40 || s.bytes().all(|b| b.is_ascii_hexdigit()) {
+            continue;
+        }
+        out.push(Candidate {
+            start: m.start(),
+            end: m.end(),
+            subtype: Some("aws_secret"),
+            action: Action::Number {
+                label: Label::Secret,
+                value: s.to_string(),
+            },
+            rank: 20,
+        });
     }
 }
 
