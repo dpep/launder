@@ -216,4 +216,4 @@ One line in flight: **detect → resolve → number → emit.**
 
 Your own identity is a watchlist, not an assumption: on a log pulled from another machine, whoever's home appears first becomes `~`, and your local names simply never match.
 
-See [CLAUDE.md](CLAUDE.md) for development conventions.
+See [CHANGELOG.md](CHANGELOG.md) for what changed between releases, [docs/DECISIONS.md](docs/DECISIONS.md) for what was turned down and why, and [CLAUDE.md](CLAUDE.md) for development conventions.

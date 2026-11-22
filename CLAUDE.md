@@ -4,7 +4,11 @@
 spew and it returns the same text with identifying paths, usernames, secrets,
 and contacts replaced by readable placeholders — while preserving everything a
 reader needs (relative paths, extensions, line numbers, system paths,
-diagnostic IDs). Read [README.md](README.md) for the product vision.
+diagnostic IDs). Read [README.md](README.md) for the product vision,
+[docs/ROADMAP.md](docs/ROADMAP.md) for what's shipped and what's open, and
+[docs/DECISIONS.md](docs/DECISIONS.md) for what was considered and turned down —
+read it before re-proposing a detector, a flag, or an optimization, because the
+rejections carry the evidence that settled them.
 
 ## First principles (do not drift from these)
 
@@ -57,6 +61,8 @@ pipeline.
 ```text
 launder/
   Cargo.toml
+  CHANGELOG.md     ← user-facing changes; rolling `## Unreleased` heading
+  docs/            ← DECISIONS.md, ROADMAP.md
   src/
     main.rs        ← shim: calls cli::run
     lib.rs         ← module list (tests drive the library)
@@ -127,8 +133,13 @@ only minor or patch bumps, never major:
 - **patch** (`0.1.x`) — fixes, output/`--help` wording, internal cleanups
 - **minor** (`0.x.0`) — new user-facing capability (a flag, a detector)
 
-Repo-only docs (README, CLAUDE.md) don't bump — they don't change what `brew`
-builds.
+Repo-only docs (README, CLAUDE.md, docs/) don't bump — they don't change what
+`brew` builds.
+
+`CHANGELOG.md` keeps a rolling `## Unreleased` heading: add the entry in the
+same change that earns it, saying what a user must do (a flag removed, a JSON
+field renamed). `release` retitles the heading as the version and date. Leave
+out a bug introduced and fixed between releases; it never reached anyone.
 
 Release with `release` (`~/.claude/bin/release`) from the repo root:
 `release patch --steps` shows the checklist, `--dry-run` previews it, and
