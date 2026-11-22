@@ -45,7 +45,7 @@ No flags, no config. It streams a line at a time, so `tail -f app.log | launder`
 | `<HOST_N>` | An internal hostname (`*.internal`, `*.local`, `*.corp`), your machine's name, a `--watch` domain |
 | `<MAC_N>` | A MAC address |
 | `<TERM_N>` | A `--watch` term that isn't a domain |
-| `<TOKEN_N>` | A token with a known prefix (`ghp_`, `sk_live_`, `AKIA`, Slack webhooks, …) or in a login slot (`docker login -p`) |
+| `<TOKEN_N>` | A token with a known prefix (`ghp_`, `sk_live_`, `AKIA`, Slack webhooks, …) or in a login slot (`curl -u KEY:`) |
 | `<JWT_N>` | A JSON Web Token |
 | `<SECRET_N>` | The value under a token, secret, or key word (`api_key=`, `client_secret:`), unless it looks like an identifier |
 | `<PASSWORD_N>` | The value under a password word, or the password in a URL or `curl -u` |
