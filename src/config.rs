@@ -6,14 +6,14 @@ use std::collections::HashSet;
 use anyhow::{Result, bail};
 
 use crate::detect::Kind;
-use crate::system::SystemInfo;
+use crate::watchlist::Watchlist;
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub enabled: HashSet<Kind>,
     pub keep_private_ips: bool,
     pub with_originals: bool,
-    pub system: Option<SystemInfo>,
+    pub watchlist: Watchlist,
 }
 
 impl Config {
@@ -45,7 +45,7 @@ impl Default for Config {
             enabled: Kind::ALL.into_iter().collect(),
             keep_private_ips: true,
             with_originals: false,
-            system: None,
+            watchlist: Watchlist::default(),
         }
     }
 }

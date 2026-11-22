@@ -90,7 +90,7 @@ pub fn host(line: &str, extra: &[String], out: &mut Vec<Candidate>) {
     for m in INTERNAL_HOST.find_iter(line) {
         out.push(host_candidate(m.start(), m.end(), m.as_str(), "internal"));
     }
-    // The machine's own hostname (from --system), matched verbatim.
+    // The machine's own hostname (from the watchlist), matched verbatim.
     for name in extra {
         if name.is_empty() {
             continue;

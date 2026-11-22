@@ -50,7 +50,6 @@ pub struct Engine {
     cfg: Config,
     line_no: usize,
     in_private_key: bool,
-    extra_hosts: Vec<String>,
     /// Literal `$HOME` prefix and its owner, for collapsing non-standard homes.
     home: Option<(String, String)>,
 }
@@ -58,28 +57,21 @@ pub struct Engine {
 impl Engine {
     pub fn new(cfg: Config) -> Self {
         let mut reg = Registry::new();
-        let mut extra_hosts = Vec::new();
-        let mut home = None;
-        if let Some(sys) = &cfg.system {
-            // Signal, not pinning: enroll the tokens to watch for, but assign no
-            // identity index up front — numbering follows first-seen order from
-            // the log, so a remote machine's trace is unaffected by local names.
-            for user in &sys.usernames {
-                reg.enroll_bare(user);
-            }
-            extra_hosts = sys.hostnames.clone();
-            if let Some(h) = &sys.home
-                && let Some(owner) = h.rsplit(['/', '\\']).next().filter(|s| !s.is_empty())
-            {
-                home = Some((h.clone(), owner.to_string()));
-            }
+        // Signal, not pinning: enroll the tokens to watch for, but assign no
+        // identity index up front — numbering follows first-seen order from
+        // the log, so a remote machine's trace is unaffected by local names.
+        for user in &cfg.watchlist.usernames {
+            reg.enroll_bare(user);
         }
+        let home = cfg.watchlist.home.as_ref().and_then(|h| {
+            let owner = h.rsplit(['/', '\\']).next().filter(|s| !s.is_empty())?;
+            Some((h.clone(), owner.to_string()))
+        });
         Engine {
             reg,
             cfg,
             line_no: 0,
             in_private_key: false,
-            extra_hosts,
             home,
         }
     }
@@ -127,7 +119,7 @@ impl Engine {
             detect::net::ip(text, self.cfg.keep_private_ips, &mut candidates);
         }
         if self.cfg.enabled(Kind::Host) {
-            detect::net::host(text, &self.extra_hosts, &mut candidates);
+            detect::net::host(text, &self.cfg.watchlist.hostnames, &mut candidates);
         }
         if self.cfg.enabled(Kind::Mac) {
             detect::net::mac(text, &mut candidates);

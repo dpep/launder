@@ -13,7 +13,7 @@ use crate::emit;
 use crate::engine::{Engine, Finding};
 use crate::input::LineReader;
 use crate::report::Report;
-use crate::system;
+use crate::watchlist::Watchlist;
 
 /// Scrub identifying paths, secrets, and contacts from logs and stack traces,
 /// keeping everything a reader needs to help.
@@ -89,7 +89,7 @@ fn execute(cli: &Cli) -> Result<()> {
         with_originals: cli.with_originals,
         // Local identity ($USER / $HOME / hostname) is always used as signal —
         // a watchlist of known-identifying tokens, never pinned. Offline.
-        system: Some(system::detect()),
+        watchlist: Watchlist::from_env(),
     };
     let mode = if cli.json {
         Mode::Json

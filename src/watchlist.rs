@@ -12,7 +12,7 @@ use std::env;
 use std::process::Command;
 
 #[derive(Debug, Clone, Default)]
-pub struct SystemInfo {
+pub struct Watchlist {
     /// Usernames to watch for (`$USER` / `$LOGNAME` / `$HOME`'s owner).
     pub usernames: Vec<String>,
     /// The literal `$HOME` prefix, collapsed to `~` even when non-standard.
@@ -21,28 +21,30 @@ pub struct SystemInfo {
     pub hostnames: Vec<String>,
 }
 
-/// Gather identity signal from the local environment. Never fails: missing
-/// sources just yield less signal.
-pub fn detect() -> SystemInfo {
-    let home = env::var("HOME").ok().filter(|s| !s.is_empty());
+impl Watchlist {
+    /// Gather identity signal from the local environment. Never fails: missing
+    /// sources just yield less signal.
+    pub fn from_env() -> Self {
+        let home = env::var("HOME").ok().filter(|s| !s.is_empty());
 
-    let mut usernames: Vec<String> = Vec::new();
-    let home_owner = home
-        .as_deref()
-        .and_then(|h| h.rsplit(['/', '\\']).next())
-        .map(str::to_string);
-    for cand in [env::var("USER").ok(), env::var("LOGNAME").ok(), home_owner] {
-        if let Some(name) = cand.filter(|s| !s.is_empty())
-            && !usernames.contains(&name)
-        {
-            usernames.push(name);
+        let mut usernames: Vec<String> = Vec::new();
+        let home_owner = home
+            .as_deref()
+            .and_then(|h| h.rsplit(['/', '\\']).next())
+            .map(str::to_string);
+        for cand in [env::var("USER").ok(), env::var("LOGNAME").ok(), home_owner] {
+            if let Some(name) = cand.filter(|s| !s.is_empty())
+                && !usernames.contains(&name)
+            {
+                usernames.push(name);
+            }
         }
-    }
 
-    SystemInfo {
-        usernames,
-        home,
-        hostnames: hostname(),
+        Watchlist {
+            usernames,
+            home,
+            hostnames: hostname(),
+        }
     }
 }
 
