@@ -7,17 +7,14 @@ use memchr::memmem::Finder;
 use super::{Action, Candidate, Label};
 
 /// `--watch` terms: a domain → `<HOST_N>` (each distinct host its own number),
-/// any other term → `<TERM_N>`. `hosts` / `terms` say which kinds are enabled.
-pub fn watch(watch: &[Term], lower: &str, hosts: bool, terms: bool, out: &mut Vec<Candidate>) {
+/// any other term → `<TERM_N>`.
+pub fn watch(watch: &[Term], lower: &str, out: &mut Vec<Candidate>) {
     for term in watch {
-        let (label, on) = if term.is_domain() {
-            (Label::Host, hosts)
+        let label = if term.is_domain() {
+            Label::Host
         } else {
-            (Label::Term, terms)
+            Label::Term
         };
-        if !on {
-            continue;
-        }
         for (start, end) in term.spans(lower.as_bytes()) {
             out.push(Candidate {
                 start,

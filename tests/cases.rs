@@ -1519,3 +1519,21 @@ fn watchlist_matches_any_case() {
         "User <USER_1> logged in on <HOST_1>"
     );
 }
+
+#[test]
+fn only_and_except_apply_to_every_detectors_output() {
+    let types = |only: Option<&str>, except: Option<&str>| Config {
+        enabled: Config::resolve_types(only, except).unwrap(),
+        ..Config::default()
+    };
+    // A URL login is found by the secrets detector but is a `user`.
+    let url = concat!("https://alice:Zq8vN2kL", "p4Rx@db.example.com/x");
+    assert_eq!(
+        launder(types(None, Some("user")), url).0,
+        "https://alice:<PASSWORD_1>@db.example.com/x"
+    );
+    assert_eq!(
+        launder(types(Some("user"), None), url).0,
+        concat!("https://<USER_1>:Zq8vN2kL", "p4Rx@db.example.com/x")
+    );
+}

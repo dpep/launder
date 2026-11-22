@@ -120,7 +120,8 @@ impl Engine {
         } else {
             self.learn_identities(paths);
         }
-        if secrets_on {
+        // The secrets detector also finds logins (URL, curl, .netrc): users.
+        if secrets_on || self.cfg.enabled(Kind::User) {
             detect::secrets::detect(text, &mut candidates);
         }
         // Diagnostic-ID preservation always runs (it only ever keeps text).
@@ -138,16 +139,12 @@ impl Engine {
             detect::net::mac(text, &mut candidates);
         }
 
-        detect::literal::watch(
-            &self.watch,
-            &lower,
-            self.cfg.enabled(Kind::Host),
-            self.cfg.enabled(Kind::Term),
-            &mut candidates,
-        );
+        detect::literal::watch(&self.watch, &lower, &mut candidates);
 
+        // --only / --except judge each span by what it scrubs, whichever
+        // detector found it.
         let kept = self.kept_spans(&lower);
-        candidates.retain(|c| !is_kept(c, &kept));
+        candidates.retain(|c| c.kind().is_none_or(|k| self.cfg.enabled(k)) && !is_kept(c, &kept));
         let resolved = resolve(candidates);
         let covered: Vec<(usize, usize)> = resolved.iter().map(|c| (c.start, c.end)).collect();
 
