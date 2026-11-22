@@ -31,10 +31,6 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
     }
 }
 
-pub fn is_uuid(s: &str) -> bool {
-    UUID.find(s).is_some_and(|m| m.len() == s.len())
-}
-
 fn keep(start: usize, end: usize, subtype: &'static str) -> Candidate {
     Candidate {
         start,
