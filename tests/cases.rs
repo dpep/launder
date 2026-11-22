@@ -1159,3 +1159,79 @@ fn webhook_urls_redact_their_secret_path() {
         ),
     ]);
 }
+
+#[test]
+fn space_separated_cli_flags_are_keyed_values() {
+    check(&[
+        (
+            "mysql --password hunter2 -h db",
+            "mysql --password <SECRET_1> -h db",
+        ),
+        ("deploy --db-pass hunter2", "deploy --db-pass <SECRET_1>"),
+        (
+            concat!(
+                "gh --token Zx9Yw8Vu7Ts6",
+                "Rq5Po4Nm3 --api-key Hk3Jd8Ws",
+                "1Qz5Pm7R"
+            ),
+            "gh --token <SECRET_1> --api-key <SECRET_2>",
+        ),
+        (
+            concat!(r#"run --secret "Zx9Yw8 Vu7Ts6"#, r#"Rq5Po4Nm3" -v"#),
+            r#"run --secret "<SECRET_1>" -v"#,
+        ),
+        // The flag's value is the next word, never the next flag or a file flag.
+        ("cli --password --verbose", "cli --password --verbose"),
+        (
+            "cli --token-file /etc/app/token",
+            "cli --token-file /etc/app/token",
+        ),
+        // `mysql -pX` is too ambiguous with other tools' short flags.
+        ("mysql -phunter2 -u root", "mysql -phunter2 -u root"),
+    ]);
+}
+
+#[test]
+fn curl_user_credentials_are_redacted() {
+    check(&[
+        (
+            "curl -u alice:hunter2 https://api.example.com/v1",
+            "curl -u <USER_1>:<PASSWORD_1> https://api.example.com/v1",
+        ),
+        (
+            "curl -s --user 'deploy-bot:hunter2' https://api.example.com",
+            "curl -s --user '<USER_1>:<PASSWORD_1>' https://api.example.com",
+        ),
+        // Other tools' `-u uid:gid` is not a credential.
+        ("docker run -u 1000:1000 app", "docker run -u 1000:1000 app"),
+    ]);
+}
+
+#[test]
+fn netrc_lines_redact_password_and_login() {
+    check(&[
+        (
+            "machine api.example.com login alice password hunter2",
+            "machine api.example.com login <USER_1> password <SECRET_1>",
+        ),
+        (
+            "default login anonymous password ''",
+            "default login anonymous password ''",
+        ),
+    ]);
+}
+
+#[test]
+fn xml_credential_elements_are_redacted() {
+    check(&[
+        (
+            "<password>hunter2</password>",
+            "<password><SECRET_1></password>",
+        ),
+        (
+            concat!("<db><apiToken>Zx9Yw8Vu7Ts6", "Rq5Po4Nm3</apiToken></db>"),
+            "<db><apiToken><SECRET_1></apiToken></db>",
+        ),
+        ("<token>short</token>", "<token>short</token>"),
+    ]);
+}

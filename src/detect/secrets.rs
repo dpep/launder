@@ -106,7 +106,7 @@ const ROLE_USERS: [&str; 11] = [
 
 /// A credential's login as an identity → `<USER_N>`. Short names share the
 /// bare-username floor: too generic (`sa`, `app`, `git`) to identify anyone.
-fn login(user: regex::Match, out: &mut Vec<Candidate>) {
+fn login(user: regex::Match, subtype: &'static str, out: &mut Vec<Candidate>) {
     let name = user.as_str();
     if name.len() < 4 || ROLE_USERS.iter().any(|r| name.eq_ignore_ascii_case(r)) {
         return;
@@ -114,7 +114,7 @@ fn login(user: regex::Match, out: &mut Vec<Candidate>) {
     out.push(Candidate {
         start: user.start(),
         end: user.end(),
-        subtype: Some("url_user"),
+        subtype: Some(subtype),
         action: Action::BareUser {
             user: name.to_string(),
         },
@@ -122,17 +122,48 @@ fn login(user: regex::Match, out: &mut Vec<Candidate>) {
     });
 }
 
+/// `curl -u user:pass` / `--user user:pass`. Only after `curl`: elsewhere
+/// `-u 1000:1000` is a uid:gid.
+static CURL_USER: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"\bcurl\b.*?\s(?:-u|--user)(?:\s+|=)['"]?([^\s:'"]+):([^\s'"]+)"#).unwrap()
+});
+
+/// A `.netrc` entry, and its `login` / `password` tokens.
+static NETRC_LINE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s*(?:machine\s+\S+|default)\s").unwrap());
+static NETRC_TOKEN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b(login|password)\s+(\S+)").unwrap());
+
+/// The words that make a key a credential key. Bare `key` is not one:
+/// `sort_key`, `cache_key` are not secrets, and `auth` is spelled out so
+/// `author` is not.
+const CREDENTIAL_WORDS: &str = r"password|passwd|passphrase|pass|pwd|secret|token|credentials?|signature|sig|session(?:[_-]?id)?|(?:api|access|account|private|master|encryption|signing)[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?";
+
+/// A long CLI flag naming a credential, then its value after a space:
+/// `--password X`, `--db-pass X`, `--api-key X`.
+static CLI_FLAG: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(?:^|\s)(--(?:[a-z0-9]+-)*)(password|passwd|passphrase|pass|token|secret|api-?key)\s+")
+        .unwrap()
+});
+
+/// `<password>…</password>`; the closing tag is checked to match.
+static XML_ELEMENT: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(&format!(
+        r"(?i)<(([a-z0-9_\-]*)({CREDENTIAL_WORDS}))>([^<]*)</([^>\s]*)>"
+    ))
+    .unwrap()
+});
+
 /// A suspicious key whose value should be entropy-checked (contextual scan).
 /// The key may carry a prefix (`access_token`, `refreshToken`, `SECRET_KEY_BASE`)
 /// and a closing quote (`"password"=>`, `"api_key":`), escaped or not
 /// (`\"token\":`). A quoted key may be followed by a comma, as in a Rails SQL
-/// bind `["token", "…"]`. Bare `key` is not a credential word: `sort_key`,
-/// `cache_key` are not secrets, and `auth` is spelled out so `author` is not.
-/// The match ends where the value begins; [`value_span`] reads the value.
+/// bind `["token", "…"]`. The match ends where the value begins;
+/// [`value_span`] reads the value.
 static KEYED_VALUE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r#"(?i)\b(([a-z0-9_\-]*)(password|passwd|passphrase|pass|pwd|secret|token|credentials?|signature|sig|session(?:[_-]?id)?|(?:api|access|account|private|master|encryption|signing)[_-]?key|secret[_-]?key[_-]?base|auth(?:orization|[_-]?key|[_-]?code)?))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]|%3[ad]))\s*"#,
-    )
+    Regex::new(&format!(
+        r#"(?i)\b(([a-z0-9_\-]*)({CREDENTIAL_WORDS}))\b(?:\\*["']\s*,|\\*["']?\s*(?:=>|[=:]|%3[ad]))\s*"#
+    ))
     .unwrap()
 });
 
@@ -257,51 +288,98 @@ pub fn detect(line: &str, out: &mut Vec<Candidate>) {
         });
     }
 
-    for caps in URL_CREDENTIAL.captures_iter(line) {
-        login(caps.get(1).unwrap(), out);
-        let pass = caps.get(2).unwrap();
-        out.push(Candidate {
-            start: pass.start(),
-            end: pass.end(),
-            subtype: Some("url_credential"),
-            action: Action::Number {
-                label: Label::Password,
-                value: pass.as_str().to_string(),
-            },
-            rank: 40,
-        });
+    for (re, subtype) in [
+        (&*URL_CREDENTIAL, "url_credential"),
+        (&*CURL_USER, "curl_user"),
+    ] {
+        for caps in re.captures_iter(line) {
+            login(caps.get(1).unwrap(), subtype, out);
+            let pass = caps.get(2).unwrap();
+            out.push(Candidate {
+                start: pass.start(),
+                end: pass.end(),
+                subtype: Some(subtype),
+                action: Action::Number {
+                    label: Label::Password,
+                    value: pass.as_str().to_string(),
+                },
+                rank: 40,
+            });
+        }
     }
 
     if !KEYED_HINT.is_match(line) {
         return;
     }
     for caps in KEYED_VALUE.captures_iter(line) {
-        let key = &caps[1];
-        let Some(gated) = entropy_gated(&caps[2], &caps[3]) else {
-            continue;
-        };
-        let (start, end) = value_span(line, caps.get(0).unwrap().end());
-        let text = &line[start..end];
-        // A UUID or SHA here is a credential: many services issue them as tokens.
-        if is_placeholder_value(text) || is_shell_cwd(key, text) {
-            continue;
-        }
-        if gated
-            && (text.chars().count() < KEYED_MIN_LEN || shannon_entropy(text) < KEYED_MIN_ENTROPY)
-        {
-            continue;
-        }
-        out.push(Candidate {
-            start,
-            end,
-            subtype: Some("keyed_entropy"),
-            action: Action::Number {
-                label: Label::Secret,
-                value: text.to_string(),
-            },
-            rank: 20,
-        });
+        let span = value_span(line, caps.get(0).unwrap().end());
+        keyed(line, &caps[1], &caps[2], &caps[3], span, out);
     }
+    for caps in CLI_FLAG.captures_iter(line) {
+        let at = caps.get(0).unwrap().end();
+        if !line[at..].starts_with('-') {
+            let span = value_span(line, at);
+            keyed(line, &caps[2], &caps[1], &caps[2], span, out);
+        }
+    }
+    for caps in XML_ELEMENT.captures_iter(line) {
+        let val = caps.get(4).unwrap();
+        if caps[1] == caps[5] {
+            keyed(
+                line,
+                &caps[1],
+                &caps[2],
+                &caps[3],
+                (val.start(), val.end()),
+                out,
+            );
+        }
+    }
+    if NETRC_LINE.is_match(line) {
+        for caps in NETRC_TOKEN.captures_iter(line) {
+            let val = caps.get(2).unwrap();
+            if &caps[1] == "login" {
+                login(val, "netrc_login", out);
+            } else {
+                let span = value_span(line, val.start());
+                keyed(line, "password", "", "password", span, out);
+            }
+        }
+    }
+}
+
+/// Judge the value of a credential key at `start..end` and push it if it is
+/// one. `prefix` and `word` split the key (`DB_` + `PASSWORD`).
+fn keyed(
+    line: &str,
+    key: &str,
+    prefix: &str,
+    word: &str,
+    (start, end): (usize, usize),
+    out: &mut Vec<Candidate>,
+) {
+    let Some(gated) = entropy_gated(prefix, word) else {
+        return;
+    };
+    let text = &line[start..end];
+    // A UUID or SHA here is a credential: many services issue them as tokens.
+    if is_placeholder_value(text) || is_shell_cwd(key, text) {
+        return;
+    }
+    if gated && (text.chars().count() < KEYED_MIN_LEN || shannon_entropy(text) < KEYED_MIN_ENTROPY)
+    {
+        return;
+    }
+    out.push(Candidate {
+        start,
+        end,
+        subtype: Some("keyed_entropy"),
+        action: Action::Number {
+            label: Label::Secret,
+            value: text.to_string(),
+        },
+        rank: 20,
+    });
 }
 
 /// Whether a keyed value needs the entropy gate, by the key's credential
