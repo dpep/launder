@@ -1359,7 +1359,7 @@ fn report_breaks_secrets_down_by_subtype() {
         concat!(
             "launder: 4 replacements\n",
             "  email   1\n",
-            "  secret  3  (github 2, keyed_entropy 1)",
+            "  secret  3  (github 2, keyed 1)",
         )
     );
 

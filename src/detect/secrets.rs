@@ -584,7 +584,7 @@ fn keyed(
     out.push(Candidate {
         start,
         end,
-        subtype: Some("keyed_entropy"),
+        subtype: Some("keyed"),
         action: Action::Number {
             label,
             value: text.to_string(),
