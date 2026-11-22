@@ -25,18 +25,6 @@ pub struct Finding {
     byte_end: usize,
 }
 
-impl Finding {
-    /// The finding `type` in JSON and `--report`. Paths still report as
-    /// `home` / `tmpdir`, split by subtype.
-    pub fn type_str(&self) -> &'static str {
-        match (self.kind, self.subtype) {
-            (Kind::Path, Some("macos_tmpdir")) => "tmpdir",
-            (Kind::Path, _) => "home",
-            (kind, _) => kind.as_str(),
-        }
-    }
-}
-
 /// The outcome of laundering one input line.
 pub struct LineResult {
     /// The laundered line, or `None` when the line is fully suppressed

@@ -13,7 +13,7 @@ use crate::report::Report;
 /// Serialize one finding, honoring the secret rule and `--with-originals`.
 pub fn finding_to_json(f: &Finding, with_originals: bool) -> Value {
     let mut obj = json!({
-        "type": f.type_str(),
+        "type": f.kind.as_str(),
         "line": f.line,
         "col": f.col,
         "len": f.len,

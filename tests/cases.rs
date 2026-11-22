@@ -6,6 +6,7 @@
 //! out — faster, deterministic, no permission prompts.
 
 use launder::config::Config;
+use launder::detect::Kind;
 use launder::engine::{Engine, Finding};
 use launder::watchlist::Watchlist;
 
@@ -485,7 +486,7 @@ fn secrets_never_expose_original_even_with_flag() {
 #[test]
 fn non_secret_original_included_only_with_flag() {
     let (_, findings) = launder(Config::default(), "ops@dpep.io");
-    let email = findings.iter().find(|f| f.type_str() == "email").unwrap();
+    let email = findings.iter().find(|f| f.kind == Kind::Email).unwrap();
     assert!(
         launder::emit::finding_to_json(email, false)
             .get("original")
@@ -495,6 +496,30 @@ fn non_secret_original_included_only_with_flag() {
         launder::emit::finding_to_json(email, true)["original"],
         serde_json::json!("ops@dpep.io")
     );
+}
+
+#[test]
+fn home_and_tmpdir_report_as_path() {
+    let input = "/Users/dpep/a.rs /var/folders/xy/abc123/T/b.log";
+    let (_, findings) = launder(Config::default(), input);
+    let typed: Vec<_> = findings
+        .iter()
+        .map(|f| {
+            let json = launder::emit::finding_to_json(f, false);
+            (json["type"].clone(), json["subtype"].clone())
+        })
+        .collect();
+    assert_eq!(
+        typed,
+        [
+            (serde_json::json!("path"), serde_json::json!("macos_home")),
+            (serde_json::json!("path"), serde_json::json!("macos_tmpdir")),
+        ]
+    );
+
+    let mut report = launder::report::Report::new();
+    report.record(&findings);
+    assert_eq!(report.counts().get("path"), Some(&2));
 }
 
 #[test]

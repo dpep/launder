@@ -18,7 +18,7 @@ impl Report {
 
     pub fn record(&mut self, findings: &[Finding]) {
         for f in findings {
-            *self.counts.entry(f.type_str()).or_insert(0) += 1;
+            *self.counts.entry(f.kind.as_str()).or_insert(0) += 1;
             self.total += 1;
         }
     }
