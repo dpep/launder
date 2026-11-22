@@ -60,7 +60,7 @@ pub struct Engine {
 }
 
 /// The shortest secret value scrubbed again wherever it repeats; a shorter
-/// one (`password=test`) is too likely to be an ordinary word.
+/// one (`password=test`) is too likely to be prose.
 const MIN_REPEAT_LEN: usize = 8;
 
 impl Engine {
@@ -268,7 +268,12 @@ impl Engine {
 
     /// Remember a secret's value so later copies of it are scrubbed too.
     fn enroll_secret(&mut self, value: &str, c: &Candidate) {
-        if value.len() < MIN_REPEAT_LEN || !matches!(c.action, Action::Number { .. }) {
+        // A word-shaped value (`password=disabled`) is scrubbed at its key
+        // only; spreading it would mangle every later use of the word.
+        if value.len() < MIN_REPEAT_LEN
+            || !matches!(c.action, Action::Number { .. })
+            || !detect::secrets::looks_generated(value)
+        {
             return;
         }
         if self.secrets.insert(value, c.clone()) {

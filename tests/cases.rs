@@ -1035,7 +1035,20 @@ fn a_known_secret_is_scrubbed_wherever_it_repeats() {
         ),
         // A value too short to be told from prose stays put elsewhere.
         ("password=abc\nabc def", "password=<PASSWORD_1>\nabc def"),
+        // So does a word-shaped one: it is scrubbed where it is a password.
+        (
+            "password=disabled\nfeature disabled",
+            "password=<PASSWORD_1>\nfeature disabled",
+        ),
     ]);
+}
+
+#[test]
+fn a_keyed_value_cannot_start_with_a_closing_bracket() {
+    check(&[(
+        "-[SUUpdate outToken:]_block_invoke: done",
+        "-[SUUpdate outToken:]_block_invoke: done",
+    )]);
 }
 
 #[test]

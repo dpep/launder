@@ -319,6 +319,12 @@ fn is_identifier_shaped(s: &str) -> bool {
     IDENTIFIER.is_match(s)
 }
 
+/// A value shaped like generated secret material rather than a word or name,
+/// so it is safe to scrub wherever it appears.
+pub fn looks_generated(s: &str) -> bool {
+    !is_identifier_shaped(s) || is_random_letters(s)
+}
+
 /// One word in one case too long to be a name: identifiers that long have
 /// several words (`user_profile_cache`), random letters have one.
 const LETTER_RUN_MIN_LEN: usize = 16;
@@ -716,6 +722,10 @@ fn closing_quote(body: &str, close: &str, q: u8) -> Option<usize> {
 /// next query parameter (`&name=`).
 fn unquoted_span(line: &str, at: usize) -> (usize, usize) {
     let rest = &line[at..];
+    // A closer ends whatever the key sat in (`outToken:]_block…`); no value.
+    if rest.starts_with([')', ']', '}', '>']) {
+        return (at, at);
+    }
     let len = rest
         .find(|c: char| c.is_whitespace() || matches!(c, ',' | ';' | '"' | '\''))
         .unwrap_or(rest.len());
