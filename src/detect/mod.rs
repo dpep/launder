@@ -204,7 +204,12 @@ impl Label {
 /// length (longest-first within a detector), then position; accept a candidate
 /// only if it doesn't overlap one already accepted. The result is sorted by
 /// start offset, ready for left-to-right assignment.
-pub fn resolve(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
+///
+/// A kept ID strictly inside a wider scrub span yields to it first: a hex run
+/// in `ops@cafebabe.io` is part of the address, not a digest. A keep as wide
+/// as the span still wins.
+pub fn resolve(candidates: Vec<Candidate>) -> Vec<Candidate> {
+    let mut candidates = drop_keeps_inside_scrubs(candidates);
     candidates.sort_by(|a, b| {
         b.precedence()
             .cmp(&a.precedence())
@@ -228,12 +233,59 @@ pub fn resolve(mut candidates: Vec<Candidate>) -> Vec<Candidate> {
     chosen.into_values().collect()
 }
 
+/// Drop each `Keep` that a wider scrub span contains.
+fn drop_keeps_inside_scrubs(candidates: Vec<Candidate>) -> Vec<Candidate> {
+    let mut scrubs: Vec<(usize, usize)> = candidates
+        .iter()
+        .filter(|c| c.kind().is_some())
+        .map(|c| (c.start, c.end))
+        .collect();
+    if scrubs.is_empty() {
+        return candidates;
+    }
+    scrubs.sort_unstable();
+    // reach[i]: the furthest end among scrubs[..=i].
+    let reach: Vec<usize> = scrubs
+        .iter()
+        .scan(0, |far, &(_, e)| {
+            *far = (*far).max(e);
+            Some(*far)
+        })
+        .collect();
+    // The furthest end of any scrub starting before (or at) `pos`.
+    let reach_from = |pos: usize, inclusive: bool| {
+        let n = scrubs.partition_point(|&(s, _)| s < pos || (inclusive && s == pos));
+        n.checked_sub(1).map_or(0, |i| reach[i])
+    };
+    candidates
+        .into_iter()
+        .filter(|c| {
+            !matches!(c.action, Action::Keep)
+                || !(reach_from(c.start, false) >= c.end || reach_from(c.start, true) > c.end)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// The quadratic greedy scan `resolve` must agree with.
-    fn resolve_naive(mut candidates: Vec<Candidate>) -> Vec<(usize, usize)> {
+    fn resolve_naive(candidates: Vec<Candidate>) -> Vec<(usize, usize)> {
+        let scrubs: Vec<(usize, usize)> = candidates
+            .iter()
+            .filter(|c| c.kind().is_some())
+            .map(|c| (c.start, c.end))
+            .collect();
+        let mut candidates: Vec<Candidate> = candidates
+            .into_iter()
+            .filter(|c| {
+                c.kind().is_some()
+                    || !scrubs
+                        .iter()
+                        .any(|&(s, e)| s <= c.start && c.end <= e && e - s > c.width())
+            })
+            .collect();
         candidates.sort_by(|a, b| {
             b.precedence()
                 .cmp(&a.precedence())

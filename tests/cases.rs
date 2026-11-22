@@ -1559,3 +1559,29 @@ fn only_and_except_apply_to_every_detectors_output() {
         concat!("https://<USER_1>:Zq8vN2kL", "p4Rx@db.example.com/x")
     );
 }
+
+// --- detection-model lane ---
+
+#[test]
+fn hex_run_inside_a_contact_does_not_keep_the_contact() {
+    check(&[
+        (
+            "reply-to: bounces+1a2b3c4d5e@mail.example.com",
+            "reply-to: <EMAIL_1>",
+        ),
+        ("contact: ops@cafebabe.io", "contact: <EMAIL_1>"),
+        (
+            "GET http://api-7d4b9c8f6d-x2k9q.svc.cluster.local/healthz",
+            "GET http://<HOST_1>/healthz",
+        ),
+        (
+            "host i-0abc123def4567.ec2.internal unreachable",
+            "host <HOST_1> unreachable",
+        ),
+        // A kept ID beside a contact still survives.
+        (
+            "ops@acme.io deployed 95f2a31c",
+            "<EMAIL_1> deployed 95f2a31c",
+        ),
+    ]);
+}
