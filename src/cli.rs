@@ -35,7 +35,7 @@ Exit codes:
 #[command(name = "launder", version, about, after_help = AFTER_HELP)]
 #[command(group(ArgGroup::new("structured").args(["json", "ndjson"])))]
 struct Cli {
-    /// Input files, read in order (stdin if none).
+    /// Input files, read in order (`-` or none: stdin).
     files: Vec<String>,
 
     /// Show each replacement instead of the text (not for pasting: shows originals).

@@ -18,33 +18,43 @@ pub enum Input {
 
 /// A source of lines: stdin or a sequence of files, read lazily.
 pub struct LineReader {
-    sources: Vec<(String, File)>,
+    /// Sources not yet started, last first.
+    sources: Vec<(String, Box<dyn Read>)>,
     current: Option<(String, BufReader<Box<dyn Read>>)>,
-    use_stdin: bool,
+    reads_stdin: bool,
 }
 
 impl LineReader {
-    /// Build a reader over `files`, or stdin if `files` is empty. Every file
-    /// is opened up front, so a missing one fails before any output is made.
+    /// Build a reader over `files` (`-` is stdin), or stdin if `files` is
+    /// empty. Every file is opened up front, so a missing one fails before
+    /// any output is made.
     pub fn new(files: &[String]) -> Result<Self> {
-        let sources = files
-            .iter()
-            .rev()
-            .map(|path| {
-                let f = File::open(path).with_context(|| format!("reading {path}"))?;
-                Ok((path.clone(), f))
-            })
-            .collect::<Result<_>>()?;
+        let stdin = || -> (String, Box<dyn Read>) { ("stdin".into(), Box::new(io::stdin())) };
+        let sources = if files.is_empty() {
+            vec![stdin()]
+        } else {
+            files
+                .iter()
+                .rev()
+                .map(|path| {
+                    if path == "-" {
+                        return Ok(stdin());
+                    }
+                    let f = File::open(path).with_context(|| format!("reading {path}"))?;
+                    Ok((path.clone(), Box::new(f) as Box<dyn Read>))
+                })
+                .collect::<Result<_>>()?
+        };
         Ok(LineReader {
             sources,
             current: None,
-            use_stdin: files.is_empty(),
+            reads_stdin: files.is_empty() || files.iter().any(|f| f == "-"),
         })
     }
 
     /// Whether any input is stdin.
     pub fn reads_stdin(&self) -> bool {
-        self.use_stdin
+        self.reads_stdin
     }
 
     /// True when no complete line is buffered, so the next read may block
@@ -58,11 +68,7 @@ impl LineReader {
     /// The next line or source boundary. `Ok(None)` once every source is done.
     pub fn read(&mut self) -> Result<Option<Input>> {
         if self.current.is_none() {
-            let (name, source): (String, Box<dyn Read>) = if std::mem::take(&mut self.use_stdin) {
-                ("stdin".into(), Box::new(io::stdin()))
-            } else if let Some((path, f)) = self.sources.pop() {
-                (path, Box::new(f))
-            } else {
+            let Some((name, source)) = self.sources.pop() else {
                 return Ok(None);
             };
             self.current = Some((name, BufReader::new(source)));

@@ -305,3 +305,13 @@ fn messages_show_the_home_dir_as_tilde() {
     assert!(err.contains("reading ~/.ssh/id_rsa"), "{err}");
     assert!(!err.contains(home.to_str().unwrap()), "{err}");
 }
+
+#[test]
+fn dash_reads_stdin_among_files() {
+    let dir = scratch("dash");
+    let log = dir.join("app.log");
+    std::fs::write(&log, "mail ops@dpep.io\n").unwrap();
+    let (code, out, _) = run(&[log.to_str().unwrap(), "-"], b"next alice@dpep.io\n");
+    assert_eq!(code, 0);
+    assert_eq!(out, "mail <EMAIL_1>\nnext <EMAIL_2>\n");
+}
